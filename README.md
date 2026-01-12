@@ -1,7 +1,5 @@
 # E-Disiplin - Sistem Poin Pelanggaran Siswa
 
-Sistem manajemen poin pelanggaran siswa untuk SMA Yadika 6 Pondok Aren.
-
 ## 📋 Fitur
 
 - ✅ Autentikasi user dengan session
@@ -40,7 +38,7 @@ E-Disiplin/
 | orangtua1 | admin123 | Orang Tua |
 | siswa1 | admin123 | Siswa |
 
-> ⚠️ **IMPORTANT**: Ubah password di production!
+Ubah password di production
 
 ## 🚀 Setup & Run
 
