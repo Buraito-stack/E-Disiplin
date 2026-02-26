@@ -89,4 +89,5 @@ const handleFormSubmit = (formId, endpoint) => {
 document.addEventListener('DOMContentLoaded', () => {
     togglePasswordVisibility('password', 'passwordToggle');
     togglePasswordVisibility('password', 'passwordToggle');
+
 });

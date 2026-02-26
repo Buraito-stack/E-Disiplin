@@ -1,9 +1,8 @@
 <?php
 
-session_start();
-
-require_once __DIR__ . '/app/config/Database.php';
-require_once __DIR__ . '/app/controllers/AuthController.php';
+require_once __DIR__ . '/../app/config/bootstrap.php';
+require_once __DIR__ . '/../app/config/Database.php';
+require_once __DIR__ . '/../app/controllers/AuthController.php';
 
 $database = new Database();
 $database->connect();
@@ -17,4 +16,4 @@ if ($authController->isLoggedIn()) {
 }
 
 // Load login view
-include 'views/login.php';
+include __DIR__ . '/../app/views/login.php';
