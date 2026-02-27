@@ -60,16 +60,31 @@ const handleFormSubmit = (formId, endpoint) => {
                 body: formData
             });
 
-            const data = await response.json();
+            // try to parse JSON if possible
+            let data = null;
+            try {
+                data = await response.json();
+            } catch (jsonErr) {
+                // ignore parse errors
+            }
 
-            if (data.success) {
+            if (!response.ok) {
+                // network request succeeded but returned error status
+                const msg = data && data.message ? data.message : `${response.status} ${response.statusText}`;
+                showAlert('error', `Request failed: ${msg}`);
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+                return;
+            }
+
+            if (data && data.success) {
                 if (data.redirect) {
                     window.location.href = data.redirect;
                 } else {
                     showAlert('success', data.message);
                 }
             } else {
-                showAlert('error', data.message);
+                showAlert('error', data && data.message ? data.message : 'Terjadi kesalahan.');
                 submitBtn.disabled = false;
                 submitBtn.textContent = originalText;
             }

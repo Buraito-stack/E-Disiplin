@@ -113,11 +113,15 @@ class SecurityHelper {
     /**
      * Rate limiting check (basic in-memory, use Redis for production)
      */
-    public static function checkRateLimit($identifier, $maxAttempts = 10, $window = 3600) {
-        $cacheKey = "ratelimit_$identifier";
+    // identifier: usually IP address
+    // action: optional string to differentiate throttles (e.g. "login")
+    // maxAttempts: number of tries allowed in the window
+    // window: length of time in seconds
+    public static function checkRateLimit($identifier, $action = '', $maxAttempts = 10, $window = 3600) {
+        $cacheKey = 'ratelimit_' . $identifier . ($action ? "_" . $action : '');
         
-        // Untuk production, gunakan Redis. Untuk now gunakan simple file-based tracking
-        $limitFile = sys_get_temp_dir() . "/ratelimit_$identifier.json";
+        // For production you'd use Redis; here we keep a simple file-based counter
+        $limitFile = sys_get_temp_dir() . "/{$cacheKey}.json";
         
         $data = [];
         if (file_exists($limitFile)) {

@@ -4,6 +4,7 @@ require_once __DIR__ . '/../app/config/bootstrap.php';
 require_once __DIR__ . '/../app/config/Database.php';
 require_once __DIR__ . '/../app/controllers/AuthController.php';
 require_once __DIR__ . '/../app/middleware/RoleMiddleware.php';
+require_once __DIR__ . '/../app/helpers/SecurityHelper.php';
 
 $database = new Database();
 $conn = $database->connect();

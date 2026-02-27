@@ -214,6 +214,12 @@ include __DIR__ . '/../app/views/layouts/header.php';
                                     <td class="py-2 pr-4 font-medium text-gray-900"><?php echo htmlspecialchars($row['username']); ?></td>
                                     <td class="py-2 pr-4"><?php echo htmlspecialchars($row['name']); ?></td>
                                     <td class="py-2 pr-4"><?php echo htmlspecialchars($row['email'] ?? '-'); ?></td>
+                                    <td class="py-2 pr-4"><?php echo htmlspecialchars($row['role']); ?></td>
+                                    <td class="py-2 pr-4">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?php echo (int)$row['is_active'] === 1 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'; ?>">
+                                            <?php echo (int)$row['is_active'] === 1 ? 'Aktif' : 'Nonaktif'; ?>
+                                        </span>
+                                    </td>
                                     <td class="py-2 pr-4">
                                         <div class="flex items-center gap-3">
                                             <button type="button" class="text-blue-600 hover:text-blue-700" title="Edit" onclick='openUserEdit(<?php echo json_encode($row); ?>)'>
@@ -231,12 +237,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
                                             </button>
                                         </div>
                                     </td>
-                                    <td class="py-2 pr-4">
-                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?php echo (int)$row['is_active'] === 1 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'; ?>">
-                                            <?php echo (int)$row['is_active'] === 1 ? 'Aktif' : 'Nonaktif'; ?>
-                                        </span>
-                                    </td>
-                                    <td class="py-2 pr-4"></td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
