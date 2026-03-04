@@ -365,7 +365,7 @@ include __DIR__ . '/../app/views/layouts/header.php';
 const logout = async () => {
     if (confirm('Yakin mau logout?')) {
         try {
-            const response = await fetch('api/auth/logout.php');
+            const response = await fetch('endpoint/auth/logout.php');
             const data = await response.json();
             if (data.success) {
                 window.location.href = data.redirect;

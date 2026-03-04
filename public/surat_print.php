@@ -66,7 +66,7 @@ if ($type === 'pernyataan') {
     }
 }
 
-require_once __DIR__ . '/app/templates/SuratTemplate.php';
+require_once __DIR__ . '/../app/templates/SuratTemplate.php';
 if ($type === 'pernyataan') {
     echo getTemplateSuratPernyataan($data);
 } else {

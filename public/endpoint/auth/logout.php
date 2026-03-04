@@ -1,6 +1,6 @@
 <?php
 
-require_once __DIR__ . '/../../app/config/bootstrap.php';
+require_once __DIR__ . '/../../../app/config/bootstrap.php';
 header('Content-Type: application/json');
 
 require_once __DIR__ . '/../../app/config/Database.php';

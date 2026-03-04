@@ -31,5 +31,5 @@ foreach ($fields as $f) {
     }
 }
 
-require_once __DIR__ . '/app/templates/SuratTemplate.php';
+require_once __DIR__ . '/../app/templates/SuratTemplate.php';
 echo getTemplateSuratPernyataan($data);

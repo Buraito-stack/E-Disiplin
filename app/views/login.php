@@ -22,7 +22,7 @@ include __DIR__ . '/layouts/header.php';
                 <div data-alert-container class="mb-6"></div>
 
                 <!-- Form -->
-                <form id="loginForm" method="POST" action="api/auth/login.php" class="space-y-5">
+                <form id="loginForm" method="POST" action="endpoint/auth/login.php" class="space-y-5">
                     <!-- CSRF Token -->
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>" />
                     
@@ -167,7 +167,7 @@ include __DIR__ . '/layouts/header.php';
 
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        handleFormSubmit('loginForm', 'api/auth/login.php');
+        handleFormSubmit('loginForm', 'endpoint/auth/login.php');
     });
 </script>
 
