@@ -41,6 +41,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($username === '' || $password === '' || $name === '') {
             $alertMessage = 'Username, password, dan nama wajib diisi.';
             $alertType = 'error';
+        } elseif (strlen($password) < 6) {
+            $alertMessage = 'Password minimal 6 karakter.';
+            $alertType = 'error';
+        } elseif (!preg_match('/[A-Za-z]/', $password) || !preg_match('/[0-9]/', $password)) {
+            $alertMessage = 'Password harus mengandung huruf dan angka.';
+            $alertType = 'error';
         } else {
             $check = $conn->prepare('SELECT id FROM users WHERE username = ? LIMIT 1');
             if ($check) {
@@ -56,6 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($stmt) {
                         $stmt->bind_param('sssssi', $username, $hash, $email, $name, $role, $isActive);
                         if ($stmt->execute()) {
+                            SecurityHelper::auditLog($conn, 'CREATE', 'users', $conn->insert_id, "Username: $username, Role: $role");
                             $alertMessage = 'User berhasil dibuat.';
                             $alertType = 'success';
                         } else {
@@ -77,6 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($stmt) {
                 $stmt->bind_param('sii', $role, $isActive, $id);
                 if ($stmt->execute()) {
+                    SecurityHelper::auditLog($conn, 'UPDATE', 'users', $id, "Role: $role, Active: $isActive");
                     $alertMessage = 'User berhasil diperbarui.';
                     $alertType = 'success';
                 } else {
@@ -98,12 +106,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($stmt) {
                     $stmt->bind_param('i', $id);
                     if ($stmt->execute()) {
+                        SecurityHelper::auditLog($conn, 'DELETE', 'users', $id, '');
                         $alertMessage = 'User berhasil dihapus.';
                         $alertType = 'success';
                     } else {
                         $alertMessage = 'Gagal menghapus user.';
                         $alertType = 'error';
                     }
+                }
+            }
+        }
+    }
+
+    if ($action === 'reset_password') {
+        $id = (int)($_POST['id'] ?? 0);
+        $newPw = trim($_POST['new_password'] ?? '');
+        if ($id <= 0 || $newPw === '') {
+            $alertMessage = 'User dan password baru wajib diisi.';
+            $alertType = 'error';
+        } elseif (strlen($newPw) < 6) {
+            $alertMessage = 'Password minimal 6 karakter.';
+            $alertType = 'error';
+        } elseif (!preg_match('/[A-Za-z]/', $newPw) || !preg_match('/[0-9]/', $newPw)) {
+            $alertMessage = 'Password harus mengandung huruf dan angka.';
+            $alertType = 'error';
+        } else {
+            $hash = password_hash($newPw, PASSWORD_BCRYPT);
+            $stmt = $conn->prepare('UPDATE users SET password = ? WHERE id = ?');
+            if ($stmt) {
+                $stmt->bind_param('si', $hash, $id);
+                if ($stmt->execute()) {
+                    SecurityHelper::auditLog($conn, 'RESET_PASSWORD', 'users', $id, 'Admin reset password');
+                    $alertMessage = 'Password berhasil direset.';
+                    $alertType = 'success';
+                } else {
+                    $alertMessage = 'Gagal mereset password.';
+                    $alertType = 'error';
                 }
             }
         }
@@ -214,7 +252,10 @@ include __DIR__ . '/../app/views/layouts/header.php';
                                     <td class="py-2 pr-4 font-medium text-gray-900"><?php echo htmlspecialchars($row['username']); ?></td>
                                     <td class="py-2 pr-4"><?php echo htmlspecialchars($row['name']); ?></td>
                                     <td class="py-2 pr-4"><?php echo htmlspecialchars($row['email'] ?? '-'); ?></td>
-                                    <td class="py-2 pr-4"><?php echo htmlspecialchars($row['role']); ?></td>
+                                    <td class="py-2 pr-4"><?php
+                                        $roleLabels = ['admin'=>'Admin','guru'=>'Guru','bk'=>'Guru BK','guru_mapel'=>'Guru Mapel','orangtua'=>'Orang Tua','siswa'=>'Siswa'];
+                                        echo htmlspecialchars($roleLabels[$row['role']] ?? $row['role']);
+                                    ?></td>
                                     <td class="py-2 pr-4">
                                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?php echo (int)$row['is_active'] === 1 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'; ?>">
                                             <?php echo (int)$row['is_active'] === 1 ? 'Aktif' : 'Nonaktif'; ?>
@@ -226,6 +267,11 @@ include __DIR__ . '/../app/views/layouts/header.php';
                                                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                     <path d="M12 20h9" />
                                                     <path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z" />
+                                                </svg>
+                                            </button>
+                                            <button type="button" class="text-amber-600 hover:text-amber-700" title="Reset Password" onclick="openResetPw(<?php echo (int)$row['id']; ?>, '<?php echo htmlspecialchars($row['username'], ENT_QUOTES); ?>')">
+                                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                                                 </svg>
                                             </button>
                                             <button type="button" class="text-red-600 hover:text-red-700" title="Hapus" onclick="openUserDelete(<?php echo (int)$row['id']; ?>, '<?php echo htmlspecialchars($row['username'], ENT_QUOTES); ?>')">
@@ -283,14 +329,15 @@ include __DIR__ . '/../app/views/layouts/header.php';
                 </div>
                 <div>
                     <label class="text-sm text-gray-600">Password</label>
-                    <input name="password" type="password" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" required />
+                    <input name="password" type="password" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" required minlength="6" placeholder="Min. 6 karakter, huruf & angka" />
                 </div>
                 <div>
                     <label class="text-sm text-gray-600">Role</label>
                     <select name="role" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
                         <option value="admin">Admin</option>
                         <option value="guru" selected>Guru</option>
-                        <option value="bk">BK</option>
+                        <option value="bk">Guru BK</option>
+                        <option value="guru_mapel">Guru Mapel</option>
                         <option value="orangtua">Orang Tua</option>
                         <option value="siswa">Siswa</option>
                     </select>
@@ -332,7 +379,8 @@ include __DIR__ . '/../app/views/layouts/header.php';
                     <select name="role" id="edit_user_role" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
                         <option value="admin">Admin</option>
                         <option value="guru">Guru</option>
-                        <option value="bk">BK</option>
+                        <option value="bk">Guru BK</option>
+                        <option value="guru_mapel">Guru Mapel</option>
                         <option value="orangtua">Orang Tua</option>
                         <option value="siswa">Siswa</option>
                     </select>
@@ -402,6 +450,31 @@ if (searchUser && tableUser) {
 }
 </script>
 
+<div id="resetPwModal" class="modal-backdrop" role="dialog" aria-modal="true">
+    <div class="modal-panel">
+        <div class="modal-header">
+            <h3 class="font-semibold text-gray-900">Reset Password</h3>
+            <button type="button" onclick="closeModal('resetPwModal')">&#10005;</button>
+        </div>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>" />
+            <input type="hidden" name="action" value="reset_password" />
+            <input type="hidden" name="id" id="reset_pw_user_id" />
+            <div class="modal-body space-y-4">
+                <p class="text-sm text-gray-600">Reset password untuk <span id="reset_pw_username" class="font-semibold text-gray-900"></span></p>
+                <div>
+                    <label class="text-sm text-gray-600">Password Baru</label>
+                    <input name="new_password" type="password" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" required minlength="6" placeholder="Min. 6 karakter, huruf & angka" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="px-3 py-2 rounded-lg border border-gray-200" onclick="closeModal('resetPwModal')">Batal</button>
+                <button type="submit" class="px-3 py-2 rounded-lg bg-amber-600 text-white">Reset Password</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 const openModal = (id) => {
     const el = document.getElementById(id);
@@ -428,6 +501,12 @@ const openUserDelete = (id, username) => {
     document.getElementById('delete_user_id').value = id;
     document.getElementById('delete_user_name').textContent = username;
     openModal('userDeleteModal');
+};
+
+const openResetPw = (id, username) => {
+    document.getElementById('reset_pw_user_id').value = id;
+    document.getElementById('reset_pw_username').textContent = username;
+    openModal('resetPwModal');
 };
 </script>
 
