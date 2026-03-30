@@ -21,20 +21,16 @@ requireRoles(['orangtua']);
 $user = $_SESSION;
 $userId = (int)$user['user_id'];
 
-// Initialize access control
 $accessControl = new AccessControl($conn);
 
-// Get anak/siswa yang terkait dengan orang tua ini
 $siswaList = [];
 $selectedSiswa = null;
 $pelanggaranAnak = [];
 $totalPoinAnak = 0;
 $totalSuratAnak = 0;
 
-// Get ONLY authorized student list
 $siswaList = $accessControl->getAuthorizedSiswaList();
 
-// Jika ada pilihan siswa, ambil data pelanggaran
 if (!empty($_GET['siswa_id'])) {
     $siswaId = (int)$_GET['siswa_id'];
     
@@ -52,7 +48,6 @@ if (!empty($_GET['siswa_id'])) {
         die('Akses ditolak. Anda hanya dapat melihat data anak Anda sendiri.');
     }
     
-    // Get pelanggaran anak
     $pelangStmt = $conn->prepare(
                 "SELECT p.id_pelanggaran, p.tanggal, p.keterangan, j.nama_jenis, j.poin
                  FROM pelanggaran p
@@ -66,11 +61,9 @@ if (!empty($_GET['siswa_id'])) {
                 $pelangResult = $pelangStmt->get_result();
                 $pelanggaranAnak = $pelangResult->fetch_all(MYSQLI_ASSOC);
                 
-                // Hitung total poin
                 $totalPoinAnak = array_sum(array_column($pelanggaranAnak, 'poin'));
             }
             
-            // Get surat pelanggaran anak
             $suratStmt = $conn->prepare(
                 "SELECT so.id_surat_orang_tua, so.tanggal_cetak, so.status_kirim, so.level_sp, p.tanggal, j.nama_jenis
                  FROM surat_orang_tua so
@@ -93,7 +86,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
 ?>
 
 <div class="min-h-screen bg-gray-50">
-    <!-- Header -->
     <nav class="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
@@ -117,14 +109,12 @@ include __DIR__ . '/../app/views/layouts/header.php';
         </div>
     </nav>
 
-    <!-- Main Content -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 dock-safe">
         <div class="mb-8">
             <h2 class="text-3xl font-bold text-gray-900">Selamat Datang, <?php echo htmlspecialchars($user['name']); ?></h2>
             <p class="text-gray-600 mt-1">Monitor riwayat pelanggaran siswa</p>
         </div>
 
-        <!-- Pilih Siswa -->
         <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
             <h3 class="font-semibold text-gray-900 mb-4">Pilih Siswa</h3>
             <?php if (empty($siswaList)): ?>
@@ -143,10 +133,8 @@ include __DIR__ . '/../app/views/layouts/header.php';
             <?php endif; ?>
         </div>
 
-        <!-- Detail Siswa -->
         <?php if ($selectedSiswa): ?>
             <div class="space-y-6">
-                <!-- Profile Card -->
                 <div class="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-6 border border-gray-100">
                     <h3 class="font-semibold text-gray-900 mb-4">Informasi Siswa</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -169,7 +157,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
                     </div>
                 </div>
 
-                <!-- Stats Cards -->
                 <div class="grid grid-cols-2 gap-4">
                     <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                         <h3 class="text-sm text-gray-600 mb-2">Total Pelanggaran</h3>
@@ -181,7 +168,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
                     </div>
                 </div>
 
-                <!-- Riwayat Pelanggaran -->
                 <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                     <h3 class="font-semibold text-gray-900 mb-4">Riwayat Pelanggaran</h3>
                     <?php if (empty($pelanggaranAnak)): ?>
@@ -216,7 +202,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
                     <?php endif; ?>
                 </div>
 
-                <!-- Surat Pelanggaran -->
                 <?php if (!empty($suratAnak)): ?>
                     <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                         <h3 class="font-semibold text-gray-900 mb-4">Surat Pelanggaran</h3>

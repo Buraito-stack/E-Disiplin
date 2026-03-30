@@ -17,7 +17,6 @@ if (!$authController->isLoggedIn()) {
 
 requireRoles(['admin', 'guru', 'bk']);
 
-// Gather any supplied parameters for autofill.  All are optional.
 $fields = [
     'nama','nis','kelas','program','masalah',
     'nama_orang_tua','pekerjaan_orang_tua','alamat_orang_tua','kontak_orang_tua',

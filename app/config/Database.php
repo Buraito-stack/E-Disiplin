@@ -10,7 +10,6 @@ class Database
 
     public function __construct()
     {
-        // Load from environment or use defaults
         $this->host = getenv('DB_HOST') ?: 'localhost';
         $this->db = getenv('DB_NAME') ?: 'e_disiplin';
         $this->user = getenv('DB_USER') ?: 'root';

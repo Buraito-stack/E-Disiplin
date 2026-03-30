@@ -45,7 +45,6 @@ class AuthController
                 ];
             }
 
-            // Set session
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['username'] = $user['username'];
             $_SESSION['name'] = $user['name'];

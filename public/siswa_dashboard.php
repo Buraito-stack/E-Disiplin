@@ -20,7 +20,6 @@ requireRoles(['siswa']);
 $user = $_SESSION;
 $username = $user['username'];
 
-// Get data siswa berdasarkan NIS (username)
 $siswaData = null;
 $pelanggaranSiswa = [];
 $totalPoinSiswa = 0;
@@ -36,7 +35,6 @@ if ($stmt) {
         $siswaData = $result->fetch_assoc();
         $siswaId = (int)$siswaData['id_siswa'];
         
-        // Get pelanggaran siswa
         $pelangStmt = $conn->prepare(
             "SELECT p.id_pelanggaran, p.tanggal, p.keterangan, j.nama_jenis, j.poin
              FROM pelanggaran p
@@ -52,7 +50,6 @@ if ($stmt) {
             $totalPoinSiswa = array_sum(array_column($pelanggaranSiswa, 'poin'));
         }
         
-        // Get surat pelanggaran siswa
         $suratStmt = $conn->prepare(
             "SELECT so.id_surat_orang_tua, so.tanggal_cetak, so.status_kirim, so.level_sp, p.tanggal, j.nama_jenis
              FROM surat_orang_tua so
@@ -76,7 +73,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
 ?>
 
 <div class="min-h-screen bg-gray-50">
-    <!-- Header -->
     <nav class="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
@@ -100,7 +96,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
         </div>
     </nav>
 
-    <!-- Main Content -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 dock-safe">
         <div class="mb-8">
             <h2 class="text-3xl font-bold text-gray-900">Selamat Datang, <?php echo htmlspecialchars($siswaData['nama'] ?? $user['name']); ?></h2>
@@ -109,7 +104,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
 
         <?php if ($siswaData): ?>
             <div class="space-y-6">
-                <!-- Profile Card -->
                 <div class="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-6 border border-gray-100">
                     <h3 class="font-semibold text-gray-900 mb-4">Profil Siswa</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -132,7 +126,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
                     </div>
                 </div>
 
-                <!-- Stats Cards -->
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                         <h3 class="text-sm text-gray-600 mb-2">Total Pelanggaran</h3>
@@ -151,7 +144,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
                     </div>
                 </div>
 
-                <!-- Tingkat Keseriusan -->
                 <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                     <h3 class="font-semibold text-gray-900 mb-4">Status Poin</h3>
                     <div class="flex items-center gap-4">
@@ -179,7 +171,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
                     </div>
                 </div>
 
-                <!-- Riwayat Pelanggaran -->
                 <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                     <h3 class="font-semibold text-gray-900 mb-4">Riwayat Pelanggaran Anda</h3>
                     <?php if (empty($pelanggaranSiswa)): ?>
@@ -216,7 +207,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
                     <?php endif; ?>
                 </div>
 
-                <!-- Surat Pelanggaran -->
                 <?php if (!empty($suratSiswa)): ?>
                     <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                         <h3 class="font-semibold text-gray-900 mb-4">Surat Pelanggaran</h3>

@@ -9,11 +9,9 @@ $database->connect();
 
 $authController = new AuthController(null);
 
-// Jika sudah login, redirect ke dashboard
 if ($authController->isLoggedIn()) {
     header('Location: dashboard.php');
     exit;
 }
 
-// Load login view
 include __DIR__ . '/../app/views/login.php';
