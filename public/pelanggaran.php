@@ -15,7 +15,7 @@ if (!$authController->isLoggedIn()) {
     exit;
 }
 
-requireRoles(['admin', 'guru', 'bk']);
+requireRoles(['admin', 'guru', 'bk', 'guru_mapel']);
 
 $user = $_SESSION;
 
@@ -47,6 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($stmt) {
                 $stmt->bind_param('iiss', $idSiswa, $idJenis, $tanggal, $keterangan);
                 if ($stmt->execute()) {
+                    SecurityHelper::auditLog($conn, 'CREATE', 'pelanggaran', $conn->insert_id, "Siswa ID: $idSiswa, Jenis ID: $idJenis");
                     $alertMessage = 'Pelanggaran berhasil ditambahkan.';
                     $alertType = 'success';
                 } else {
@@ -72,6 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($stmt) {
                 $stmt->bind_param('iissi', $idSiswa, $idJenis, $tanggal, $keterangan, $id);
                 if ($stmt->execute()) {
+                    SecurityHelper::auditLog($conn, 'UPDATE', 'pelanggaran', $id, "Siswa ID: $idSiswa, Jenis ID: $idJenis");
                     $alertMessage = 'Pelanggaran berhasil diperbarui.';
                     $alertType = 'success';
                 } else {
@@ -89,6 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($stmt) {
                 $stmt->bind_param('i', $id);
                 if ($stmt->execute()) {
+                    SecurityHelper::auditLog($conn, 'DELETE', 'pelanggaran', $id, '');
                     $alertMessage = 'Pelanggaran berhasil dihapus.';
                     $alertType = 'success';
                 } else {
@@ -96,6 +99,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $alertType = 'error';
                 }
             }
+        }
+    }
+
+    if ($action === 'bulk_delete') {
+        $ids = $_POST['bulk_ids'] ?? '';
+        $idArray = array_filter(array_map('intval', explode(',', $ids)));
+        if (!empty($idArray)) {
+            // Delete related surat_orang_tua first
+            $placeholders = implode(',', array_fill(0, count($idArray), '?'));
+            $types = str_repeat('i', count($idArray));
+
+            $stmt = $conn->prepare("DELETE FROM surat_orang_tua WHERE id_pelanggaran IN ($placeholders)");
+            if ($stmt) { $stmt->bind_param($types, ...$idArray); $stmt->execute(); }
+
+            $stmt = $conn->prepare("DELETE FROM pelanggaran WHERE id_pelanggaran IN ($placeholders)");
+            if ($stmt) {
+                $stmt->bind_param($types, ...$idArray);
+                if ($stmt->execute()) {
+                    $count = $stmt->affected_rows;
+                    SecurityHelper::auditLog($conn, 'BULK_DELETE', 'pelanggaran', null, "Deleted $count records");
+                    $alertMessage = "$count pelanggaran berhasil dihapus.";
+                    $alertType = 'success';
+                }
+            }
+        } else {
+            $alertMessage = 'Pilih pelanggaran yang ingin dihapus.';
+            $alertType = 'error';
         }
     }
     }
@@ -174,7 +204,10 @@ include __DIR__ . '/../app/views/layouts/header.php';
                     <h2 class="text-2xl font-bold text-gray-900">Daftar Pelanggaran</h2>
                     <p class="text-gray-600 mt-1">Menampilkan data pelanggaran per halaman.</p>
                 </div>
-                <button onclick="openPelanggaranCreate()" class="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">Tambah Pelanggaran</button>
+                <div class="flex items-center gap-2">
+                    <a href="daftar_pelanggaran_print.php" class="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50">Cetak Daftar</a>
+                    <button onclick="openPelanggaranCreate()" class="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">Tambah Pelanggaran</button>
+                </div>
             </div>
         </div>
 
@@ -187,8 +220,18 @@ include __DIR__ . '/../app/views/layouts/header.php';
         <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm" id="tablePelanggaran">
+                    <div id="bulkBar" class="hidden mb-3 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
+                        <span class="text-sm text-red-700"><span id="bulkCount">0</span> data dipilih</span>
+                        <button type="button" onclick="bulkDelete()" class="px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700">Hapus Terpilih</button>
+                    </div>
+                    <form id="bulkForm" method="POST" class="hidden">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>" />
+                        <input type="hidden" name="action" value="bulk_delete" />
+                        <input type="hidden" name="bulk_ids" id="bulkIds" />
+                    </form>
                     <thead>
                         <tr class="text-left text-gray-500">
+                            <th class="py-2 pr-2 w-8"><input type="checkbox" id="checkAll" class="rounded" /></th>
                             <th class="py-2 pr-4">Tanggal</th>
                             <th class="py-2 pr-4">Siswa</th>
                             <th class="py-2 pr-4">Kelas</th>
@@ -200,10 +243,11 @@ include __DIR__ . '/../app/views/layouts/header.php';
                     </thead>
                     <tbody class="text-gray-700">
                         <?php if (empty($pelanggaranList)): ?>
-                            <tr><td colspan="7" class="py-3 text-gray-500">Belum ada data pelanggaran.</td></tr>
+                            <tr><td colspan="8" class="py-3 text-gray-500">Belum ada data pelanggaran.</td></tr>
                         <?php else: ?>
                             <?php foreach ($pelanggaranList as $row): ?>
                                 <tr class="border-t border-gray-100">
+                                    <td class="py-2 pr-2"><input type="checkbox" class="bulk-check rounded" value="<?php echo (int)$row['id_pelanggaran']; ?>" /></td>
                                     <td class="py-2 pr-4"><?php echo htmlspecialchars($row['tanggal']); ?></td>
                                     <td class="py-2 pr-4 font-medium text-gray-900"><?php echo htmlspecialchars($row['nama']); ?></td>
                                     <td class="py-2 pr-4"><?php echo htmlspecialchars($row['kelas']); ?></td>
@@ -417,6 +461,42 @@ const openPelanggaranEdit = (row) => {
 const openPelanggaranDelete = (id) => {
     document.getElementById('delete_id_pelanggaran').value = id;
     openModal('pelanggaranDeleteModal');
+};
+</script>
+
+<script>
+const checkAll = document.getElementById('checkAll');
+const bulkBar = document.getElementById('bulkBar');
+const bulkCount = document.getElementById('bulkCount');
+
+const updateBulkBar = () => {
+    const checked = document.querySelectorAll('.bulk-check:checked');
+    if (checked.length > 0) {
+        bulkBar.classList.remove('hidden');
+        bulkCount.textContent = checked.length;
+    } else {
+        bulkBar.classList.add('hidden');
+    }
+};
+
+if (checkAll) {
+    checkAll.addEventListener('change', () => {
+        document.querySelectorAll('.bulk-check').forEach(cb => { cb.checked = checkAll.checked; });
+        updateBulkBar();
+    });
+}
+
+document.querySelectorAll('.bulk-check').forEach(cb => {
+    cb.addEventListener('change', updateBulkBar);
+});
+
+const bulkDelete = () => {
+    const checked = document.querySelectorAll('.bulk-check:checked');
+    const ids = Array.from(checked).map(cb => cb.value);
+    if (ids.length === 0) return;
+    if (!confirm('Yakin ingin menghapus ' + ids.length + ' pelanggaran terpilih?')) return;
+    document.getElementById('bulkIds').value = ids.join(',');
+    document.getElementById('bulkForm').submit();
 };
 </script>
 
