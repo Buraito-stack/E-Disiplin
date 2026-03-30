@@ -15,7 +15,6 @@ if (!$authController->isLoggedIn()) {
     exit;
 }
 
-// Redirect berdasarkan role
 $role = $_SESSION['role'] ?? '';
 if ($role === 'orangtua') {
     header('Location: ortu_dashboard.php');
@@ -23,16 +22,15 @@ if ($role === 'orangtua') {
 } elseif ($role === 'siswa') {
     header('Location: siswa_dashboard.php');
     exit;
-} elseif (!in_array($role, ['admin', 'guru', 'bk'], true)) {
+} elseif (!in_array($role, ['admin', 'guru', 'bk', 'guru_mapel'], true)) {
     header('Location: index.php');
     exit;
 }
 
 $user = $_SESSION;
 $role = $user['role'] ?? '';
-$isStaff = in_array($role, ['admin', 'guru', 'bk'], true);
+$isStaff = in_array($role, ['admin', 'guru', 'bk', 'guru_mapel'], true);
 
-// Get dashboard data from database
 $siswaCount = 0;
 $pelanggaranCount = 0;
 $suratCount = 0;
@@ -110,7 +108,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
 ?>
 
 <div class="min-h-screen bg-gray-50">
-    <!-- Header -->
     <nav class="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
@@ -137,45 +134,16 @@ include __DIR__ . '/../app/views/layouts/header.php';
         </div>
     </nav>
 
-    <!-- Main Content -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 dock-safe">
-        <!-- Welcome Section -->
         <div class="mb-8">
             <h2 class="text-3xl font-bold text-gray-900">Selamat Datang, <?php echo ucfirst(explode(' ', $user['name'])[0]); ?></h2>
             <p class="text-gray-600 mt-1">Sistem Manajemen Poin Pelanggaran Siswa</p>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Left Column -->
             <div class="lg:col-span-2 space-y-6">
-                <!-- Profile Card -->
-                <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                    <div class="flex items-start justify-between">
-                        <div class="flex-1">
-                            <h3 class="font-semibold text-gray-900 mb-4">Profile</h3>
-                            <div class="flex items-center gap-4">
-                                <div class="w-20 h-20 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center">
-                                    <span class="text-white text-2xl font-bold"><?php echo substr($user['name'], 0, 1); ?></span>
-                                </div>
-                                <div>
-                                    <p class="text-lg font-semibold text-gray-900"><?php echo $user['name']; ?></p>
-                                    <p class="text-sm text-gray-600 capitalize"><?php echo $user['role']; ?></p>
-                                </div>
-                            </div>
-                        </div>
-                        <button class="p-2 hover:bg-gray-100 rounded-lg transition">
-                            <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-
                 <?php if ($isStaff): ?>
-                <!-- Stats Cards -->
                 <div class="grid grid-cols-2 gap-4">
-                    <!-- Card 1 -->
                     <div class="bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl p-6 text-white">
                         <div class="flex justify-between items-start mb-4">
                             <h3 class="font-semibold">Total Siswa</h3>
@@ -187,7 +155,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
                         <p class="text-blue-100 text-sm mt-1">Data terdaftar</p>
                     </div>
 
-                    <!-- Card 2 -->
                     <div class="bg-gradient-to-br from-red-400 to-red-600 rounded-2xl p-6 text-white">
                         <div class="flex justify-between items-start mb-4">
                             <h3 class="font-semibold">Pelanggaran</h3>
@@ -199,7 +166,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
                         <p class="text-red-100 text-sm mt-1">Bulan ini</p>
                     </div>
 
-                    <!-- Card 3 -->
                     <div class="bg-gradient-to-br from-green-400 to-green-600 rounded-2xl p-6 text-white">
                         <div class="flex justify-between items-start mb-4">
                             <h3 class="font-semibold">Surat Terkirim</h3>
@@ -211,7 +177,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
                         <p class="text-green-100 text-sm mt-1">Total terkirim</p>
                     </div>
 
-                    <!-- Card 4 -->
                     <div class="bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-2xl p-6 text-white">
                         <div class="flex justify-between items-start mb-4">
                             <h3 class="font-semibold">Aktif 30 Hari</h3>
@@ -224,7 +189,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
                     </div>
                 </div>
 
-                <!-- Ringkasan Sistem -->
                 <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="font-semibold text-gray-900">Ringkasan Sistem</h3>
@@ -250,7 +214,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
                     </div>
                 </div>
 
-                <!-- Grafik & Aktivitas -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                         <h3 class="font-semibold text-gray-900 mb-4">Grafik Pelanggaran 7 Hari</h3>
@@ -262,7 +225,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
                     </div>
                 </div>
 
-                <!-- Aktivitas Terbaru -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                         <h3 class="font-semibold text-gray-900 mb-4">Aktivitas Terbaru</h3>
@@ -299,7 +261,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
                     </div>
                 </div>
 
-                <!-- Distribusi Pelanggaran -->
                 <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="font-semibold text-gray-900">Distribusi Pelanggaran</h3>
@@ -325,7 +286,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
                     <?php endif; ?>
                 </div>
                 <?php else: ?>
-                <!-- Portal Orang Tua / Siswa -->
                 <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                     <h3 class="font-semibold text-gray-900 mb-3">Portal Orang Tua & Siswa</h3>
                     <p class="text-sm text-gray-600 mb-4">Gunakan fitur cek surat untuk melihat pemberitahuan pelanggaran berdasarkan NIS.</p>
@@ -346,9 +306,7 @@ include __DIR__ . '/../app/views/layouts/header.php';
 
             </div>
 
-            <!-- Right Column -->
             <div class="space-y-6">
-                <!-- Menu Utama -->
                 <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="font-semibold text-gray-900">Menu Utama</h3>
@@ -406,31 +364,8 @@ include __DIR__ . '/../app/views/layouts/header.php';
                     <?php endif; ?>
                 </div>
 
-                <!-- Role Info -->
-                <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                    <h3 class="font-semibold text-gray-900 mb-4">Informasi Akun</h3>
-                    <div class="space-y-3">
-                        <div>
-                            <p class="text-xs font-semibold text-gray-500 uppercase">Nama</p>
-                            <p class="text-sm text-gray-900 font-medium"><?php echo $user['name']; ?></p>
-                        </div>
-                        <div>
-                            <p class="text-xs font-semibold text-gray-500 uppercase">Username</p>
-                            <p class="text-sm text-gray-900 font-medium"><?php echo $user['username']; ?></p>
-                        </div>
-                        <div>
-                            <p class="text-xs font-semibold text-gray-500 uppercase">Role</p>
-                            <div class="mt-1">
-                                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 capitalize">
-                                    <?php echo $user['role']; ?>
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
                 <?php if ($isStaff): ?>
-                <!-- Quick Stats -->
                 <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                     <h3 class="font-semibold text-gray-900 mb-4">Statistik Cepat</h3>
                     <div class="space-y-3">
@@ -446,12 +381,11 @@ include __DIR__ . '/../app/views/layouts/header.php';
                 </div>
                 <?php endif; ?>
 
-                <!-- Footer Info -->
-                <div class="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-6 text-white">
-                    <h4 class="font-semibold mb-2">Tips & Panduan</h4>
-                    <p class="text-sm text-gray-300 mb-4">Manfaatkan fitur pencarian untuk menemukan data siswa dengan cepat.</p>
-                    <button class="text-sm text-blue-400 hover:text-blue-300 font-medium">Baca dokumentasi →</button>
-                </div>
+                <a href="dokumentasi.php" class="block bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-6 text-white hover:from-gray-800 hover:to-gray-700 transition">
+                    <h4 class="font-semibold mb-2">Panduan Penggunaan</h4>
+                    <p class="text-sm text-gray-300 mb-4">Pelajari cara menggunakan semua fitur sistem E-Disiplin.</p>
+                    <span class="text-sm text-blue-400 font-medium">Buka dokumentasi &rarr;</span>
+                </a>
             </div>
         </div>
     </div>

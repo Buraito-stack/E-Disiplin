@@ -123,6 +123,56 @@ body {
     white-space: nowrap;
 }
 
+.dock-profile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 0;
+    text-decoration: none;
+    border-radius: 14px;
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.dock-profile:hover {
+    transform: translateY(-2px);
+}
+
+.dock-profile.is-active .dock-avatar {
+    box-shadow: 0 0 0 2px #6366f1;
+}
+
+.dock-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.dock-profile-name {
+    font-size: 9px;
+    font-weight: 600;
+    color: #374151;
+    white-space: nowrap;
+    max-width: 60px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dock-divider {
+    width: 36px;
+    height: 1px;
+    background: rgba(148, 163, 184, 0.35);
+    margin: 2px auto;
+}
+
 .modal-backdrop {
     position: fixed;
     inset: 0;
@@ -217,6 +267,69 @@ input[type="checkbox"]:checked {
 @media (max-width: 768px) {
     .login-container {
         width: 100%;
+    }
+
+    .dock-safe {
+        padding-left: 16px;
+        padding-bottom: 100px;
+    }
+
+    .dock {
+        left: 50%;
+        top: auto;
+        bottom: 12px;
+        transform: translateX(-50%);
+        flex-direction: row;
+        gap: 2px;
+        padding: 8px 12px;
+        border-radius: 20px;
+        max-width: 95vw;
+        overflow-x: auto;
+    }
+
+    .dock.is-hidden {
+        transform: translateX(-50%) translateY(120%);
+    }
+
+    .dock-item {
+        width: 52px;
+        height: 48px;
+        border-radius: 12px;
+        flex-shrink: 0;
+    }
+
+    .dock-item::after {
+        display: none;
+    }
+
+    .dock-icon svg {
+        width: 18px;
+        height: 18px;
+    }
+
+    .dock-label {
+        font-size: 8px;
+    }
+
+    .dock-profile {
+        flex-shrink: 0;
+    }
+
+    .dock-avatar {
+        width: 30px;
+        height: 30px;
+        font-size: 12px;
+    }
+
+    .dock-profile-name {
+        font-size: 8px;
+        max-width: 44px;
+    }
+
+    .dock-divider {
+        width: 1px;
+        height: 28px;
+        margin: 0 4px;
     }
 }
 
