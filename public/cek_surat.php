@@ -17,7 +17,6 @@ if (!$authController->isLoggedIn()) {
 
 requireRoles(['orangtua', 'siswa']);
 
-// Redirect ke dashboard yang sesuai
 $role = $_SESSION['role'] ?? '';
 if ($role === 'orangtua') {
     header('Location: ortu_dashboard.php');
@@ -27,24 +26,44 @@ if ($role === 'orangtua') {
     exit;
 }
 
+$nis = trim($_GET['nis'] ?? '');
+$suratList = [];
+
 if ($nis !== '') {
-    $stmt = $conn->prepare(
-        "SELECT so.id_surat_orang_tua, so.tanggal_cetak, so.status_kirim,
-                p.tanggal AS tanggal_pelanggaran, p.keterangan,
-                s.nama, s.nis, s.kelas,
-                j.nama_jenis, j.poin
-         FROM surat_orang_tua so
-         JOIN pelanggaran p ON p.id_pelanggaran = so.id_pelanggaran
-         JOIN siswa s ON s.id_siswa = p.id_siswa
-         JOIN jenis_pelanggaran j ON j.id_jenis = p.id_jenis
-         WHERE s.nis = ?
-         ORDER BY so.tanggal_cetak DESC, so.id_surat_orang_tua DESC"
-    );
-    if ($stmt) {
-        $stmt->bind_param('s', $nis);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        if ($result) $suratList = $result->fetch_all(MYSQLI_ASSOC);
+    // Ownership verification: siswa can only see own NIS, orangtua only their child
+    $allowed = false;
+    if ($role === 'siswa') {
+        $allowed = ($nis === ($_SESSION['username'] ?? ''));
+    } elseif ($role === 'orangtua') {
+        require_once __DIR__ . '/../app/middleware/AccessControl.php';
+        $ac = new AccessControl($conn);
+        $ownSiswa = $ac->getAuthorizedSiswaList();
+        foreach ($ownSiswa as $s) {
+            if ($s['nis'] === $nis) { $allowed = true; break; }
+        }
+    } else {
+        $allowed = in_array($role, ['admin', 'guru', 'bk', 'guru_mapel'], true);
+    }
+
+    if ($allowed) {
+        $stmt = $conn->prepare(
+            "SELECT so.id_surat_orang_tua, so.tanggal_cetak, so.status_kirim,
+                    p.tanggal AS tanggal_pelanggaran, p.keterangan,
+                    s.nama, s.nis, s.kelas,
+                    j.nama_jenis, j.poin
+             FROM surat_orang_tua so
+             JOIN pelanggaran p ON p.id_pelanggaran = so.id_pelanggaran
+             JOIN siswa s ON s.id_siswa = p.id_siswa
+             JOIN jenis_pelanggaran j ON j.id_jenis = p.id_jenis
+             WHERE s.nis = ?
+             ORDER BY so.tanggal_cetak DESC, so.id_surat_orang_tua DESC"
+        );
+        if ($stmt) {
+            $stmt->bind_param('s', $nis);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if ($result) $suratList = $result->fetch_all(MYSQLI_ASSOC);
+        }
     }
 }
 

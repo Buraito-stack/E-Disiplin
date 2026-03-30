@@ -15,17 +15,19 @@ if (!$authController->isLoggedIn()) {
     exit;
 }
 
-requireRoles(['admin', 'guru', 'bk']);
+require_once __DIR__ . '/../app/middleware/AccessControl.php';
 
-// the print page supports two modes:
-//  * SP letter (default) - fetched from surat_orang_tua table via id
-//  * Pernyataan letter (type=pernyataan) - data supplied directly via GET params
-
+$role = $_SESSION['role'] ?? '';
 $type = $_GET['type'] ?? 'sp';
 
 $data = null;
 if ($type === 'pernyataan') {
-    // copy any parameter we know from GET
+    // Only staff can generate pernyataan via GET params
+    if (!in_array($role, ['admin', 'guru', 'bk'], true)) {
+        http_response_code(403);
+        echo 'Akses ditolak.';
+        exit;
+    }
     $keys = ['nama','nis','kelas','program','masalah',
              'nama_orang_tua','pekerjaan_orang_tua','alamat_orang_tua','kontak_orang_tua',
              'nama_guru_bk','nama_guru_wali','nomor_surat','tanggal_cetak'];
@@ -41,6 +43,15 @@ if ($type === 'pernyataan') {
 } else {
     $idSurat = isset($_GET['id']) ? (int)$_GET['id'] : 0;
     if ($idSurat > 0) {
+        // Verify ownership: orangtua/siswa can only view their own surat
+        $accessControl = new AccessControl($conn);
+        $suratAccess = $accessControl->verifySuratAccess($idSurat);
+        if (!$suratAccess && in_array($role, ['orangtua', 'siswa'], true)) {
+            http_response_code(403);
+            echo 'Akses ditolak. Anda hanya dapat melihat surat milik Anda.';
+            exit;
+        }
+
         $stmt = $conn->prepare(
             "SELECT so.id_surat_orang_tua, so.tanggal_cetak, so.status_kirim, so.level_sp, so.nomor_surat,
                     p.tanggal AS tanggal_pelanggaran, p.keterangan,

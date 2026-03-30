@@ -15,9 +15,12 @@ if (!$authController->isLoggedIn()) {
     exit;
 }
 
+require_once __DIR__ . '/../app/helpers/SettingsHelper.php';
+
 requireRoles(['admin', 'guru', 'bk']);
 
 $user = $_SESSION;
+$appSettings = SettingsHelper::getAll($conn);
 
 $alertMessage = null;
 $alertType = 'success';
@@ -47,7 +50,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buat_surat'])) {
                     $alertMessage = 'Surat untuk pelanggaran ini sudah pernah dibuat.';
                     $alertType = 'error';
                 } else {
-                    // Get siswa dari pelanggaran
                     $getSiswaStmt = $conn->prepare("SELECT p.id_siswa, s.level_sp FROM pelanggaran p JOIN siswa s ON p.id_siswa = s.id_siswa WHERE p.id_pelanggaran = ?");
                     if ($getSiswaStmt) {
                         $getSiswaStmt->bind_param('i', $idPelanggaran);
@@ -58,28 +60,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['buat_surat'])) {
                             $idSiswa = (int)$siswaData['id_siswa'];
                             $levelSpSebelum = $siswaData['level_sp'];
 
-                            // Map SP ke angka
                             $levelSpMap = ['SP1' => 1, 'SP2' => 2, 'SP3' => 3, 'LE' => 4];
                             $levelSpAngka = $levelSpMap[$levelSp] ?? 1;
 
-                            // Generate nomor surat
-                            $tanggun = date('n'); // bulan
+                            $tanggun = date('n');
                             $tahun = date('Y');
                             $tglCetak = date('d');
                             $nomorSurat = "$tglCetak/$levelSpAngka/$tanggun/$tahun";
 
-                            // Insert surat
                             $insertStmt = $conn->prepare("INSERT INTO surat_orang_tua (id_pelanggaran, tanggal_cetak, status_kirim, level_sp, nomor_surat) VALUES (?, ?, ?, ?, ?)");
                             if ($insertStmt) {
                                 $insertStmt->bind_param('issss', $idPelanggaran, $tanggalCetak, $statusKirim, $levelSp, $nomorSurat);
                                 if ($insertStmt->execute()) {
-                                    // Update level_sp siswa
                                     $updateSiswaStmt = $conn->prepare("UPDATE siswa SET level_sp = ?, tanggal_sp_terakhir = NOW() WHERE id_siswa = ?");
                                     if ($updateSiswaStmt) {
                                         $updateSiswaStmt->bind_param('ii', $levelSpAngka, $idSiswa);
                                         $updateSiswaStmt->execute();
                                     }
 
+                                    SecurityHelper::auditLog($conn, 'CREATE', 'surat_orang_tua', $conn->insert_id, "Level: $levelSp, No: $nomorSurat, Siswa ID: $idSiswa");
                                     $alertMessage = "Surat pelanggaran $levelSp berhasil dibuat (No: $nomorSurat).";
                                     $alertType = 'success';
                                 } else {
@@ -110,19 +109,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $action = $_POST['action'];
 
         if ($action === 'update_surat') {
-            $id = (int)($_POST['id_surat_orang_tua'] ?? 0);
-            $status = trim($_POST['status_kirim'] ?? '');
-            if ($id > 0) {
-                $stmt = $conn->prepare('UPDATE surat_orang_tua SET status_kirim = ? WHERE id_surat_orang_tua = ?');
-                if ($stmt) {
-                    $stmt->bind_param('si', $status, $id);
-                    if ($stmt->execute()) {
-                        $alertMessage = 'Status surat berhasil diperbarui.';
-                        $alertType = 'success';
-                    } else {
-                        $alertMessage = 'Gagal memperbarui status surat.';
-                        $alertType = 'error';
+            $userRole = $_SESSION['role'] ?? '';
+            if (!in_array($userRole, ['admin', 'guru', 'bk'], true)) {
+                $alertMessage = 'Anda tidak memiliki izin untuk mengubah status surat.';
+                $alertType = 'error';
+            } else {
+                $id = (int)($_POST['id_surat_orang_tua'] ?? 0);
+                $status = trim($_POST['status_kirim'] ?? '');
+                $allowedStatuses = ['Belum Dikirim', 'Terkirim', 'Diterima'];
+                if ($id > 0 && in_array($status, $allowedStatuses, true)) {
+                    $stmt = $conn->prepare('UPDATE surat_orang_tua SET status_kirim = ? WHERE id_surat_orang_tua = ?');
+                    if ($stmt) {
+                        $stmt->bind_param('si', $status, $id);
+                        if ($stmt->execute()) {
+                            SecurityHelper::auditLog($conn, 'UPDATE_STATUS', 'surat_orang_tua', $id, "Status: $status");
+                            $alertMessage = 'Status surat berhasil diperbarui.';
+                            $alertType = 'success';
+                        } else {
+                            $alertMessage = 'Gagal memperbarui status surat.';
+                            $alertType = 'error';
+                        }
                     }
+                } else {
+                    $alertMessage = 'Data status tidak valid.';
+                    $alertType = 'error';
                 }
             }
         }
@@ -143,8 +153,91 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 }
             }
         }
+
+        if ($action === 'create_pernyataan') {
+            $idSiswa = (int)($_POST['id_siswa'] ?? 0);
+            $masalah = trim($_POST['masalah'] ?? '');
+            $guruBK = trim($_POST['nama_guru_bk'] ?? '');
+            $guruWali = trim($_POST['nama_guru_wali'] ?? '');
+            $wakasek = trim($_POST['nama_wakasek'] ?? '');
+            $program = trim($_POST['program_keahlian'] ?? '');
+            $tanggal = $_POST['tanggal_pernyataan'] ?? date('Y-m-d');
+            if ($idSiswa <= 0 || $masalah === '') {
+                $alertMessage = 'Siswa dan uraian masalah wajib diisi.';
+                $alertType = 'error';
+            } else {
+                $bulan = date('n'); $tahun = date('Y');
+                $countRes = $conn->query("SELECT COUNT(*)+1 AS seq FROM surat_perjanjian");
+                $seq = $countRes ? (int)$countRes->fetch_assoc()['seq'] : 1;
+                $nomorSurat = sprintf('%03d/SMK-TIG/SP/%s/%s', $seq, $bulan, $tahun);
+                $stmt = $conn->prepare("INSERT INTO surat_perjanjian (id_siswa, tanggal_perjanjian, isi_perjanjian, nomor_surat, nama_guru_bk, nama_guru_wali, nama_wakasek, program_keahlian) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                if ($stmt) {
+                    $stmt->bind_param('isssssss', $idSiswa, $tanggal, $masalah, $nomorSurat, $guruBK, $guruWali, $wakasek, $program);
+                    if ($stmt->execute()) {
+                        $alertMessage = "Surat pernyataan berhasil dibuat (No: {$nomorSurat}).";
+                    } else {
+                        $alertMessage = 'Gagal membuat surat pernyataan.'; $alertType = 'error';
+                    }
+                }
+            }
+        }
+
+        if ($action === 'delete_pernyataan') {
+            $id = (int)($_POST['id_pernyataan'] ?? 0);
+            if ($id > 0) {
+                $stmt = $conn->prepare("DELETE FROM surat_perjanjian WHERE id_perjanjian = ?");
+                if ($stmt) { $stmt->bind_param('i', $id); $stmt->execute(); $alertMessage = 'Surat pernyataan berhasil dihapus.'; }
+            }
+        }
+
+        if ($action === 'create_pindah') {
+            $idSiswa = (int)($_POST['id_siswa_pindah'] ?? 0);
+            $alasan = trim($_POST['alasan_pindah'] ?? '');
+            $sekolahTujuan = trim($_POST['sekolah_tujuan'] ?? '');
+            $kepalaSekolah = trim($_POST['kepala_sekolah'] ?? 'Kepala Sekolah');
+            $tanggal = $_POST['tanggal_pindah'] ?? date('Y-m-d');
+            if ($idSiswa <= 0 || $alasan === '') {
+                $alertMessage = 'Siswa dan alasan pindah wajib diisi.'; $alertType = 'error';
+            } else {
+                $bulan = date('n', strtotime($tanggal)); $tahun = date('Y', strtotime($tanggal));
+                $countRes = $conn->query("SELECT COUNT(*)+1 AS seq FROM surat_pindah");
+                $seq = $countRes ? (int)$countRes->fetch_assoc()['seq'] : 1;
+                $nomorSurat = sprintf('%03d/SMKTIG/KPK/%s/%s', $seq, $bulan, $tahun);
+                $stmt = $conn->prepare("INSERT INTO surat_pindah (id_siswa, tanggal_pindah, alasan_pindah, nomor_surat, sekolah_tujuan, kepala_sekolah) VALUES (?, ?, ?, ?, ?, ?)");
+                if ($stmt) {
+                    $stmt->bind_param('isssss', $idSiswa, $tanggal, $alasan, $nomorSurat, $sekolahTujuan, $kepalaSekolah);
+                    if ($stmt->execute()) {
+                        $alertMessage = "Surat pindah berhasil dibuat (No: {$nomorSurat}).";
+                    } else {
+                        $alertMessage = 'Gagal membuat surat pindah.'; $alertType = 'error';
+                    }
+                }
+            }
+        }
+
+        if ($action === 'delete_pindah') {
+            $id = (int)($_POST['id_surat_pindah'] ?? 0);
+            if ($id > 0) {
+                $stmt = $conn->prepare("DELETE FROM surat_pindah WHERE id_surat_pindah = ?");
+                if ($stmt) { $stmt->bind_param('i', $id); $stmt->execute(); $alertMessage = 'Surat pindah berhasil dihapus.'; }
+            }
+        }
     }
 }
+
+$_dbName = $conn->query("SELECT DATABASE()")->fetch_row()[0];
+$_addCol = function(string $table, string $col, string $def) use ($conn, $_dbName): void {
+    $r = $conn->query("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='{$_dbName}' AND TABLE_NAME='{$table}' AND COLUMN_NAME='{$col}'");
+    if ($r && $r->fetch_row()[0] == 0) $conn->query("ALTER TABLE `{$table}` ADD COLUMN `{$col}` {$def}");
+};
+$_addCol('surat_perjanjian', 'nomor_surat',      'VARCHAR(100) DEFAULT NULL');
+$_addCol('surat_perjanjian', 'nama_guru_bk',     'VARCHAR(150) DEFAULT NULL');
+$_addCol('surat_perjanjian', 'nama_guru_wali',   'VARCHAR(150) DEFAULT NULL');
+$_addCol('surat_perjanjian', 'nama_wakasek',     'VARCHAR(150) DEFAULT NULL');
+$_addCol('surat_perjanjian', 'program_keahlian', 'VARCHAR(100) DEFAULT NULL');
+$_addCol('surat_pindah', 'nomor_surat',    'VARCHAR(100) DEFAULT NULL');
+$_addCol('surat_pindah', 'sekolah_tujuan', 'VARCHAR(200) DEFAULT NULL');
+$_addCol('surat_pindah', 'kepala_sekolah', 'VARCHAR(150) DEFAULT NULL');
 
 $pelanggaranSelectList = [];
 $result = $conn->query("SELECT p.id_pelanggaran, s.nama, s.kelas, j.nama_jenis, p.tanggal FROM pelanggaran p JOIN siswa s ON s.id_siswa = p.id_siswa JOIN jenis_pelanggaran j ON j.id_jenis = p.id_jenis ORDER BY p.tanggal DESC, p.id_pelanggaran DESC LIMIT 100");
@@ -176,7 +269,21 @@ if ($stmt) {
     if ($result) $suratList = $result->fetch_all(MYSQLI_ASSOC);
 }
 
-$title = 'Surat Pelanggaran - E-Disiplin';
+$siswaOptions = [];
+$result = $conn->query("SELECT id_siswa, nama, kelas, nis FROM siswa ORDER BY nama ASC");
+if ($result) $siswaOptions = $result->fetch_all(MYSQLI_ASSOC);
+
+$pernyataanList = [];
+$result = $conn->query("SELECT sp.id_perjanjian, sp.tanggal_perjanjian, sp.isi_perjanjian, sp.nomor_surat, sp.nama_guru_bk, sp.nama_guru_wali, sp.nama_wakasek, sp.program_keahlian, s.nama, s.nis, s.kelas, s.nama_orang_tua, s.pekerjaan_orang_tua, s.alamat_orang_tua, s.kontak_orang_tua FROM surat_perjanjian sp JOIN siswa s ON s.id_siswa = sp.id_siswa ORDER BY sp.tanggal_perjanjian DESC, sp.id_perjanjian DESC LIMIT 50");
+if ($result) $pernyataanList = $result->fetch_all(MYSQLI_ASSOC);
+
+$pindahList = [];
+$result = $conn->query("SELECT sp.id_surat_pindah, sp.tanggal_pindah, sp.alasan_pindah, sp.nomor_surat, sp.sekolah_tujuan, sp.kepala_sekolah, s.nama, s.nis, s.kelas, s.alamat, s.nama_orang_tua FROM surat_pindah sp JOIN siswa s ON s.id_siswa = sp.id_siswa ORDER BY sp.tanggal_pindah DESC, sp.id_surat_pindah DESC LIMIT 50");
+if ($result) $pindahList = $result->fetch_all(MYSQLI_ASSOC);
+
+$activeTab = $_GET['tab'] ?? 'sp';
+
+$title = 'Surat - E-Disiplin';
 include __DIR__ . '/../app/views/layouts/header.php';
 ?>
 
@@ -190,7 +297,7 @@ include __DIR__ . '/../app/views/layouts/header.php';
                     </div>
                     <div>
                         <h1 class="text-xl font-bold text-gray-900">E-Disiplin</h1>
-                        <p class="text-xs text-gray-500">Surat Pelanggaran</p>
+                        <p class="text-xs text-gray-500">Surat</p>
                     </div>
                 </div>
                 <div class="flex items-center gap-4">
@@ -211,50 +318,30 @@ include __DIR__ . '/../app/views/layouts/header.php';
     </nav>
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 dock-safe">
-        <div class="mb-6">
-            <h2 class="text-2xl font-bold text-gray-900">Buat Surat Pelanggaran</h2>
-            <p class="text-gray-600 mt-1">Pilih pelanggaran untuk membuat surat.</p>
+        <div class="mb-4">
+            <h2 class="text-2xl font-bold text-gray-900">Surat</h2>
         </div>
 
         <?php if ($alertMessage): ?>
-            <div class="mb-6 rounded-xl border <?php echo $alertType === 'success' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'; ?> p-4 text-sm <?php echo $alertType === 'success' ? 'text-green-700' : 'text-red-700'; ?>">
+            <div class="mb-4 rounded-xl border <?php echo $alertType === 'success' ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'; ?> p-4 text-sm">
                 <?php echo htmlspecialchars($alertMessage); ?>
             </div>
         <?php endif; ?>
 
-        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
-            <form method="POST" class="space-y-4">
-                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
-                    <div class="md:col-span-8">
-                        <label class="text-sm font-medium text-gray-700">Pilih Pelanggaran</label>
-                        <select name="id_pelanggaran" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                            <option value="">-- Pilih Pelanggaran --</option>
-                            <?php foreach ($pelanggaranSelectList as $row): ?>
-                                <option value="<?php echo (int)$row['id_pelanggaran']; ?>">
-                                    <?php echo htmlspecialchars($row['tanggal'] . ' - ' . $row['nama'] . ' (' . $row['kelas'] . ') - ' . $row['nama_jenis']); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="md:col-span-4">
-                        <label class="text-sm font-medium text-gray-700">Level Surat</label>
-                        <select name="level_sp" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                            <option value="SP1">SP 1 - Pelanggaran Ringan</option>
-                            <option value="SP2">SP 2 - Pelanggaran Sedang</option>
-                            <option value="SP3">SP 3 - Pelanggaran Berat</option>
-                            <option value="LE">LE - Level Ekstensif</option>
-                        </select>
-                    </div>
-                </div>
-                <button type="submit" name="buat_surat" class="w-full bg-blue-600 text-white text-sm font-medium py-2 rounded-lg hover:bg-blue-700 transition">Buat Surat</button>
-            </form>
+        <div class="flex items-center justify-between mb-6 border-b border-gray-200">
+            <div class="flex gap-2">
+                <a href="?tab=sp" class="px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 <?php echo $activeTab === 'sp' ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700'; ?>">Surat Pelanggaran</a>
+                <a href="?tab=pernyataan" class="px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 <?php echo $activeTab === 'pernyataan' ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700'; ?>">Surat Pernyataan</a>
+                <a href="?tab=pindah" class="px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 <?php echo $activeTab === 'pindah' ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700'; ?>">Surat Pindah</a>
+            </div>
+            <a href="daftar_pelanggaran_print.php" class="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition mb-1" target="_blank">Cetak Laporan</a>
         </div>
 
+        <?php if ($activeTab === 'sp'): ?>
         <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="font-semibold text-gray-900">Surat Pelanggaran Terbaru</h3>
-                <span class="text-xs text-gray-500">Data per halaman</span>
+                <button type="button" onclick="openModal('createSpModal')" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">+ Buat Surat</button>
             </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm" id="tableSurat">
@@ -340,6 +427,104 @@ include __DIR__ . '/../app/views/layouts/header.php';
                 </div>
             </div>
         </div>
+
+        <?php elseif ($activeTab === 'pernyataan'): ?>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-gray-900">Daftar Surat Pernyataan</h3>
+                <button type="button" onclick="openModal('createPernyataanModal')" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">+ Buat Surat</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                    <thead><tr class="text-left text-gray-500">
+                        <th class="py-2 pr-4">Nomor</th><th class="py-2 pr-4">Tanggal</th>
+                        <th class="py-2 pr-4">Siswa</th><th class="py-2 pr-4">Kelas</th>
+                        <th class="py-2 pr-4">Masalah</th><th class="py-2 pr-4">Aksi</th>
+                    </tr></thead>
+                    <tbody class="text-gray-700">
+                        <?php if (empty($pernyataanList)): ?>
+                            <tr><td colspan="6" class="py-3 text-gray-500">Belum ada surat pernyataan.</td></tr>
+                        <?php else: ?>
+                            <?php foreach ($pernyataanList as $row): ?>
+                                <tr class="border-t border-gray-100">
+                                    <td class="py-2 pr-4 text-xs text-gray-500"><?php echo htmlspecialchars($row['nomor_surat'] ?? '-'); ?></td>
+                                    <td class="py-2 pr-4"><?php echo htmlspecialchars($row['tanggal_perjanjian']); ?></td>
+                                    <td class="py-2 pr-4 font-medium text-gray-900"><?php echo htmlspecialchars($row['nama']); ?></td>
+                                    <td class="py-2 pr-4"><?php echo htmlspecialchars($row['kelas']); ?></td>
+                                    <td class="py-2 pr-4 max-w-xs truncate"><?php echo htmlspecialchars(mb_strimwidth($row['isi_perjanjian'] ?? '', 0, 60, '...')); ?></td>
+                                    <td class="py-2 pr-4">
+                                        <div class="flex items-center gap-3">
+                                            <a href="surat_print.php?type=pernyataan&<?php echo http_build_query(['nama'=>$row['nama'],'nis'=>$row['nis'],'kelas'=>$row['kelas'],'program'=>$row['program_keahlian']??'','masalah'=>$row['isi_perjanjian'],'nama_orang_tua'=>$row['nama_orang_tua'],'pekerjaan_orang_tua'=>$row['pekerjaan_orang_tua'],'alamat_orang_tua'=>$row['alamat_orang_tua'],'kontak_orang_tua'=>$row['kontak_orang_tua'],'nama_guru_bk'=>$row['nama_guru_bk'],'nama_guru_wali'=>$row['nama_guru_wali'],'nama_wakasek'=>$row['nama_wakasek'],'nomor_surat'=>$row['nomor_surat'],'tanggal_cetak'=>$row['tanggal_perjanjian']]); ?>" target="_blank" class="text-blue-600 hover:text-blue-700" title="Print">
+                                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7"/><path d="M6 18h12v4H6z"/><path d="M6 13h12"/><path d="M6 14h12"/></svg>
+                                            </a>
+                                            <button type="button" onclick="confirmDeletePernyataan(<?php echo (int)$row['id_perjanjian']; ?>)" class="text-red-600 hover:text-red-700" title="Hapus">
+                                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <form id="deletePernyataanForm" method="POST" class="hidden">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+            <input type="hidden" name="action" value="delete_pernyataan">
+            <input type="hidden" name="id_pernyataan" id="deletePernyataanId">
+        </form>
+
+        <?php elseif ($activeTab === 'pindah'): ?>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-gray-900">Daftar Surat Keterangan Pindah</h3>
+                <button type="button" onclick="openModal('createPindahModal')" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">+ Buat Surat</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                    <thead><tr class="text-left text-gray-500">
+                        <th class="py-2 pr-4">Nomor</th><th class="py-2 pr-4">Tanggal</th>
+                        <th class="py-2 pr-4">Siswa</th><th class="py-2 pr-4">Kelas</th>
+                        <th class="py-2 pr-4">Sekolah Tujuan</th><th class="py-2 pr-4">Alasan</th>
+                        <th class="py-2 pr-4">Aksi</th>
+                    </tr></thead>
+                    <tbody class="text-gray-700">
+                        <?php if (empty($pindahList)): ?>
+                            <tr><td colspan="7" class="py-3 text-gray-500">Belum ada surat keterangan pindah.</td></tr>
+                        <?php else: ?>
+                            <?php foreach ($pindahList as $row): ?>
+                                <tr class="border-t border-gray-100">
+                                    <td class="py-2 pr-4 text-xs text-gray-500"><?php echo htmlspecialchars($row['nomor_surat'] ?? '-'); ?></td>
+                                    <td class="py-2 pr-4"><?php echo htmlspecialchars($row['tanggal_pindah']); ?></td>
+                                    <td class="py-2 pr-4 font-medium text-gray-900"><?php echo htmlspecialchars($row['nama']); ?></td>
+                                    <td class="py-2 pr-4"><?php echo htmlspecialchars($row['kelas']); ?></td>
+                                    <td class="py-2 pr-4"><?php echo htmlspecialchars($row['sekolah_tujuan'] ?? '-'); ?></td>
+                                    <td class="py-2 pr-4 max-w-xs truncate"><?php echo htmlspecialchars(mb_strimwidth($row['alasan_pindah'] ?? '', 0, 50, '...')); ?></td>
+                                    <td class="py-2 pr-4">
+                                        <div class="flex items-center gap-3">
+                                            <a href="surat_pindah_print.php?id=<?php echo (int)$row['id_surat_pindah']; ?>" target="_blank" class="text-blue-600 hover:text-blue-700" title="Print">
+                                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7"/><path d="M6 18h12v4H6z"/><path d="M6 13h12"/><path d="M6 14h12"/></svg>
+                                            </a>
+                                            <button type="button" onclick="confirmDeletePindah(<?php echo (int)$row['id_surat_pindah']; ?>)" class="text-red-600 hover:text-red-700" title="Hapus">
+                                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <form id="deletePindahForm" method="POST" class="hidden">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+            <input type="hidden" name="action" value="delete_pindah">
+            <input type="hidden" name="id_surat_pindah" id="deletePindahId">
+        </form>
+        <?php endif; ?>
+
     </div>
 </div>
 
@@ -384,6 +569,144 @@ include __DIR__ . '/../app/views/layouts/header.php';
             <div class="modal-footer">
                 <button type="button" class="px-3 py-2 rounded-lg border border-gray-200" onclick="closeModal('suratDeleteModal')">Batal</button>
                 <button type="submit" class="px-3 py-2 rounded-lg bg-red-600 text-white">Hapus</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="createSpModal" class="modal-backdrop" role="dialog" aria-modal="true">
+    <div class="modal-panel" style="max-width:520px;">
+        <div class="modal-header">
+            <h3 class="font-semibold text-gray-900">Buat Surat Pelanggaran</h3>
+            <button type="button" onclick="closeModal('createSpModal')">✕</button>
+        </div>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+            <div class="modal-body space-y-3">
+                <div>
+                    <label class="text-sm font-medium text-gray-700">Pilih Pelanggaran</label>
+                    <select name="id_pelanggaran" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                        <option value="">-- Pilih Pelanggaran --</option>
+                        <?php foreach ($pelanggaranSelectList as $row): ?>
+                            <option value="<?php echo (int)$row['id_pelanggaran']; ?>">
+                                <?php echo htmlspecialchars($row['tanggal'] . ' - ' . $row['nama'] . ' (' . $row['kelas'] . ') - ' . $row['nama_jenis']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-gray-700">Level Surat</label>
+                    <select name="level_sp" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                        <option value="SP1">SP 1 - Pelanggaran Ringan</option>
+                        <option value="SP2">SP 2 - Pelanggaran Sedang</option>
+                        <option value="SP3">SP 3 - Pelanggaran Berat</option>
+                        <option value="LE">LE - Level Ekstensif</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="px-3 py-2 rounded-lg border border-gray-200" onclick="closeModal('createSpModal')">Batal</button>
+                <button type="submit" name="buat_surat" class="px-3 py-2 rounded-lg bg-blue-600 text-white">Buat Surat</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="createPernyataanModal" class="modal-backdrop" role="dialog" aria-modal="true">
+    <div class="modal-panel" style="max-width:600px;">
+        <div class="modal-header">
+            <h3 class="font-semibold text-gray-900">Buat Surat Pernyataan Siswa</h3>
+            <button type="button" onclick="closeModal('createPernyataanModal')">✕</button>
+        </div>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+            <input type="hidden" name="action" value="create_pernyataan">
+            <div class="modal-body space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="sm:col-span-2">
+                        <label class="text-sm font-medium text-gray-700">Siswa <span class="text-red-500">*</span></label>
+                        <select name="id_siswa" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                            <option value="">-- Pilih Siswa --</option>
+                            <?php foreach ($siswaOptions as $s): ?>
+                                <option value="<?php echo (int)$s['id_siswa']; ?>"><?php echo htmlspecialchars($s['nama'] . ' (' . $s['kelas'] . ') - ' . $s['nis']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-sm font-medium text-gray-700">Tanggal Surat</label>
+                        <input type="date" name="tanggal_pernyataan" value="<?php echo date('Y-m-d'); ?>" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="text-sm font-medium text-gray-700">Program Keahlian</label>
+                        <input type="text" name="program_keahlian" placeholder="cth: Rekayasa Perangkat Lunak" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="text-sm font-medium text-gray-700">Nama Guru BK</label>
+                        <input type="text" name="nama_guru_bk" value="<?php echo htmlspecialchars($appSettings['nama_guru_bk'] ?? ''); ?>" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="text-sm font-medium text-gray-700">Nama Guru Wali Kelas</label>
+                        <input type="text" name="nama_guru_wali" placeholder="Nama wali kelas" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="text-sm font-medium text-gray-700">Nama Wakasek Kesiswaan</label>
+                        <input type="text" name="nama_wakasek" value="<?php echo htmlspecialchars($appSettings['nama_wakasek'] ?? ''); ?>" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="text-sm font-medium text-gray-700">Uraian Masalah <span class="text-red-500">*</span></label>
+                        <textarea name="masalah" rows="3" required placeholder="Tuliskan uraian masalah..." class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="px-3 py-2 rounded-lg border border-gray-200" onclick="closeModal('createPernyataanModal')">Batal</button>
+                <button type="submit" class="px-3 py-2 rounded-lg bg-blue-600 text-white">Buat Surat</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="createPindahModal" class="modal-backdrop" role="dialog" aria-modal="true">
+    <div class="modal-panel" style="max-width:520px;">
+        <div class="modal-header">
+            <h3 class="font-semibold text-gray-900">Buat Surat Keterangan Pindah</h3>
+            <button type="button" onclick="closeModal('createPindahModal')">✕</button>
+        </div>
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+            <input type="hidden" name="action" value="create_pindah">
+            <div class="modal-body space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="sm:col-span-2">
+                        <label class="text-sm font-medium text-gray-700">Siswa <span class="text-red-500">*</span></label>
+                        <select name="id_siswa_pindah" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                            <option value="">-- Pilih Siswa --</option>
+                            <?php foreach ($siswaOptions as $s): ?>
+                                <option value="<?php echo (int)$s['id_siswa']; ?>"><?php echo htmlspecialchars($s['nama'] . ' (' . $s['kelas'] . ') - ' . $s['nis']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-sm font-medium text-gray-700">Tanggal Surat</label>
+                        <input type="date" name="tanggal_pindah" value="<?php echo date('Y-m-d'); ?>" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="text-sm font-medium text-gray-700">Kepala Sekolah</label>
+                        <input type="text" name="kepala_sekolah" value="<?php echo htmlspecialchars($appSettings['nama_kepala_sekolah'] ?? ''); ?>" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="text-sm font-medium text-gray-700">Sekolah Tujuan</label>
+                        <input type="text" name="sekolah_tujuan" placeholder="Nama sekolah tujuan (opsional)" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="text-sm font-medium text-gray-700">Alasan Pindah <span class="text-red-500">*</span></label>
+                        <textarea name="alasan_pindah" rows="3" required placeholder="Tuliskan alasan pindah..." class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="px-3 py-2 rounded-lg border border-gray-200" onclick="closeModal('createPindahModal')">Batal</button>
+                <button type="submit" class="px-3 py-2 rounded-lg bg-blue-600 text-white">Buat Surat</button>
             </div>
         </form>
     </div>
@@ -440,6 +763,20 @@ const openSuratEdit = (row) => {
 const openSuratDelete = (id) => {
     document.getElementById('delete_id_surat').value = id;
     openModal('suratDeleteModal');
+};
+
+const confirmDeletePernyataan = (id) => {
+    if (confirm('Yakin ingin menghapus surat pernyataan ini?')) {
+        document.getElementById('deletePernyataanId').value = id;
+        document.getElementById('deletePernyataanForm').submit();
+    }
+};
+
+const confirmDeletePindah = (id) => {
+    if (confirm('Yakin ingin menghapus surat pindah ini?')) {
+        document.getElementById('deletePindahId').value = id;
+        document.getElementById('deletePindahForm').submit();
+    }
 };
 </script>
 
