@@ -15,56 +15,76 @@ if (!$authController->isLoggedIn()) {
 }
 
 $user = $_SESSION;
+$userId = (int)$user['user_id'];
 $alertMessage = null;
 $alertType = 'success';
-$resetSuccess = false;
+$action = $_POST['action'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // CSRF Token verification (CRITICAL SECURITY CHECK)
     if (!SecurityHelper::verifyCSRFToken()) {
         $alertMessage = 'Akses ditolak: token tidak valid. Silakan muat ulang halaman.';
         $alertType = 'error';
-    } else {
+    } elseif ($action === 'update_profile') {
+        $newName = trim($_POST['name'] ?? '');
+        $newEmail = trim($_POST['email'] ?? '');
+
+        if (empty($newName)) {
+            $alertMessage = 'Nama tidak boleh kosong.';
+            $alertType = 'error';
+        } elseif ($newEmail !== '' && !filter_var($newEmail, FILTER_VALIDATE_EMAIL)) {
+            $alertMessage = 'Format email tidak valid.';
+            $alertType = 'error';
+        } else {
+            $stmt = $conn->prepare('UPDATE users SET name = ?, email = ? WHERE id = ?');
+            if ($stmt) {
+                $stmt->bind_param('ssi', $newName, $newEmail, $userId);
+                if ($stmt->execute()) {
+                    $_SESSION['name'] = $newName;
+                    $_SESSION['email'] = $newEmail;
+                    $user['name'] = $newName;
+                    $user['email'] = $newEmail;
+                    $alertMessage = 'Profil berhasil diperbarui.';
+                    $alertType = 'success';
+                } else {
+                    $alertMessage = 'Gagal memperbarui profil.';
+                    $alertType = 'error';
+                }
+            }
+        }
+    } elseif ($action === 'update_password') {
         $oldPassword = $_POST['old_password'] ?? '';
         $newPassword = $_POST['new_password'] ?? '';
         $confirmPassword = $_POST['confirm_password'] ?? '';
-        
-        // Validation
+
         if (empty($oldPassword) || empty($newPassword) || empty($confirmPassword)) {
-            $alertMessage = 'Semua field harus diisi.';
+            $alertMessage = 'Semua field password harus diisi.';
             $alertType = 'error';
         } elseif ($newPassword !== $confirmPassword) {
-            $alertMessage = 'Password baru dan konfirmasi password tidak cocok.';
+            $alertMessage = 'Password baru dan konfirmasi tidak cocok.';
             $alertType = 'error';
         } elseif (strlen($newPassword) < 6) {
             $alertMessage = 'Password minimal 6 karakter.';
             $alertType = 'error';
         } else {
-            // Get current user data
-            $userStmt = $conn->prepare('SELECT password FROM users WHERE id = ? LIMIT 1');
-            if ($userStmt) {
-                $userId = (int)$user['user_id'];
-                $userStmt->bind_param('i', $userId);
-                $userStmt->execute();
-                $userResult = $userStmt->get_result();
-                
-                if ($userResult && $userResult->num_rows > 0) {
-                    $userData = $userResult->fetch_assoc();
-                    
-                    // Verify old password
+            $stmt = $conn->prepare('SELECT password FROM users WHERE id = ? LIMIT 1');
+            if ($stmt) {
+                $stmt->bind_param('i', $userId);
+                $stmt->execute();
+                $result = $stmt->get_result();
+
+                if ($result && $result->num_rows > 0) {
+                    $userData = $result->fetch_assoc();
                     if (!password_verify($oldPassword, $userData['password'])) {
                         $alertMessage = 'Password lama tidak sesuai.';
                         $alertType = 'error';
                     } else {
-                        // Update password
-                        $hashedPassword = password_hash($newPassword, PASSWORD_BCRYPT);
+                        $hashed = password_hash($newPassword, PASSWORD_BCRYPT);
                         $updateStmt = $conn->prepare('UPDATE users SET password = ? WHERE id = ?');
                         if ($updateStmt) {
-                            $updateStmt->bind_param('si', $hashedPassword, $userId);
+                            $updateStmt->bind_param('si', $hashed, $userId);
                             if ($updateStmt->execute()) {
                                 $alertMessage = 'Password berhasil diperbarui.';
                                 $alertType = 'success';
-                                $resetSuccess = true;
                             } else {
                                 $alertMessage = 'Gagal memperbarui password.';
                                 $alertType = 'error';
@@ -77,12 +97,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$title = 'Reset Password - E-Disiplin';
+// Fetch fresh user data
+$stmt = $conn->prepare('SELECT name, email, username, role FROM users WHERE id = ? LIMIT 1');
+$currentUser = null;
+if ($stmt) {
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if ($result && $result->num_rows > 0) {
+        $currentUser = $result->fetch_assoc();
+    }
+}
+$currentUser = $currentUser ?? ['name' => $user['name'], 'email' => $user['email'] ?? '', 'username' => $user['username'], 'role' => $user['role']];
+
+$title = 'Pengaturan Akun - E-Disiplin';
 include __DIR__ . '/../app/views/layouts/header.php';
 ?>
 
 <div class="min-h-screen bg-gray-50">
-    <!-- Header -->
     <nav class="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
@@ -92,7 +124,7 @@ include __DIR__ . '/../app/views/layouts/header.php';
                     </div>
                     <div>
                         <h1 class="text-xl font-bold text-gray-900">E-Disiplin</h1>
-                        <p class="text-xs text-gray-500">Reset Password</p>
+                        <p class="text-xs text-gray-500">Pengaturan Akun</p>
                     </div>
                 </div>
                 <div class="flex items-center gap-4">
@@ -121,81 +153,105 @@ include __DIR__ . '/../app/views/layouts/header.php';
         </div>
     </nav>
 
-    <!-- Main Content -->
-    <div class="flex items-center justify-center min-h-[calc(100vh-64px)] px-4">
-        <div class="w-full max-w-md">
-            <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
-                <div class="text-center mb-8">
-                    <h2 class="text-2xl font-bold text-gray-900">Reset Password</h2>
-                    <p class="text-gray-600 mt-2">Ubah password akun Anda</p>
+    <div class="max-w-2xl mx-auto px-4 py-8 dock-safe">
+
+        <?php if ($alertMessage): ?>
+            <div class="mb-6 p-4 rounded-lg <?php echo $alertType === 'error' ? 'bg-red-50 border border-red-200 text-red-700' : 'bg-green-50 border border-green-200 text-green-700'; ?>">
+                <p class="text-sm font-medium"><?php echo htmlspecialchars($alertMessage); ?></p>
+            </div>
+        <?php endif; ?>
+
+        <!-- Profile Card -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
+            <div class="flex items-center gap-4 mb-2">
+                <div class="w-16 h-16 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
+                    <span class="text-white text-2xl font-bold"><?php echo strtoupper(substr($currentUser['name'], 0, 1)); ?></span>
                 </div>
-
-                <?php if ($alertMessage): ?>
-                    <div class="mb-6 p-4 rounded-lg <?php echo $alertType === 'error' ? 'bg-red-50 border border-red-200 text-red-700' : 'bg-green-50 border border-green-200 text-green-700'; ?>">
-                        <p class="text-sm font-medium"><?php echo htmlspecialchars($alertMessage); ?></p>
-                    </div>
-                <?php endif; ?>
-
-                <?php if (!$resetSuccess): ?>
-                    <form method="POST" class="space-y-4">
-                        <!-- CSRF Token -->
-                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>" />
-                        
-                        <!-- Old Password -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Password Lama</label>
-                            <input type="password" name="old_password" required 
-                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                   placeholder="Masukkan password lama">
-                        </div>
-
-                        <!-- New Password -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Password Baru</label>
-                            <input type="password" name="new_password" required 
-                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                   placeholder="Minimal 6 karakter">
-                        </div>
-
-                        <!-- Confirm Password -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Konfirmasi Password Baru</label>
-                            <input type="password" name="confirm_password" required 
-                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                   placeholder="Ulangi password baru">
-                        </div>
-
-                        <!-- Submit Button -->
-                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition mt-6">
-                            Update Password
-                        </button>
-                    </form>
-
-                    <!-- Password Requirements -->
-                    <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p class="text-xs font-semibold text-blue-900 mb-2">Syarat Password:</p>
-                        <ul class="text-xs text-blue-700 space-y-1">
-                            <li>✓ Minimal 6 karakter</li>
-                            <li>✓ Gunakan kombinasi huruf dan angka</li>
-                            <li>✓ Jangan gunakan password yang mudah ditebak</li>
-                        </ul>
-                    </div>
-                <?php else: ?>
-                    <div class="text-center">
-                        <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <svg class="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                            </svg>
-                        </div>
-                        <p class="text-gray-600 mb-4">Password Anda berhasil diperbarui!</p>
-                        <p class="text-sm text-gray-500 mb-6">Silakan login kembali dengan password baru Anda.</p>
-                        <a href="index.php" class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition">
-                            Kembali ke Login
-                        </a>
-                    </div>
-                <?php endif; ?>
+                <div>
+                    <p class="text-lg font-semibold text-gray-900"><?php echo htmlspecialchars($currentUser['name']); ?></p>
+                    <p class="text-sm text-gray-500">@<?php echo htmlspecialchars($currentUser['username']); ?></p>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 capitalize mt-1">
+                        <?php echo htmlspecialchars($currentUser['role']); ?>
+                    </span>
+                </div>
             </div>
         </div>
+
+        <!-- Edit Profil -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Edit Profil</h3>
+            <form method="POST" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>" />
+                <input type="hidden" name="action" value="update_profile" />
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                    <input type="text" disabled
+                           value="<?php echo htmlspecialchars($currentUser['username']); ?>"
+                           class="w-full px-4 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed">
+                    <p class="text-xs text-gray-400 mt-1">Username tidak dapat diubah</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap</label>
+                    <input type="text" name="name" required
+                           value="<?php echo htmlspecialchars($currentUser['name']); ?>"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                           placeholder="Masukkan nama lengkap">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input type="email" name="email"
+                           value="<?php echo htmlspecialchars($currentUser['email'] ?? ''); ?>"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                           placeholder="contoh@email.com">
+                </div>
+
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition">
+                    Simpan Profil
+                </button>
+            </form>
+        </div>
+
+        <!-- Ganti Password -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Ganti Password</h3>
+            <form method="POST" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>" />
+                <input type="hidden" name="action" value="update_password" />
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Password Lama</label>
+                    <input type="password" name="old_password" required
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                           placeholder="Masukkan password lama">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Password Baru</label>
+                    <input type="password" name="new_password" required
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                           placeholder="Minimal 6 karakter">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Konfirmasi Password Baru</label>
+                    <input type="password" name="confirm_password" required
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                           placeholder="Ulangi password baru">
+                </div>
+
+                <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p class="text-xs text-amber-700">Minimal 6 karakter. Gunakan kombinasi huruf dan angka.</p>
+                </div>
+
+                <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-6 rounded-lg transition">
+                    Update Password
+                </button>
+            </form>
+        </div>
+
     </div>
 </div>
 
