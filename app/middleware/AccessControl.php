@@ -15,10 +15,6 @@ class AccessControl {
         $this->userRole = $_SESSION['role'] ?? null;
     }
     
-    /**
-     * Verify orang tua owns this student
-     * Return student record if authorized, else false
-     */
     public function verifySiswaOwnership($siswaId) {
         if (!$this->userId || $this->userRole !== 'orangtua') {
             return false;
@@ -41,47 +37,42 @@ class AccessControl {
         return $result->fetch_assoc();
     }
     
-    /**
-     * Verify guru owns this student (taught in same class)
-     */
     public function verifyGuruStudentAccess($siswaId) {
-        if (!$this->userId || $this->userRole !== 'guru') {
+        if (!$this->userId) {
             return false;
         }
-        
-        // Simplified - assumes guru username matches kelas or has role assignment
-        // For production, implement proper guru_kelas junction table
+
+        $staffRoles = ['admin', 'guru', 'bk', 'guru_mapel'];
+        if (!in_array($this->userRole, $staffRoles, true)) {
+            return false;
+        }
+
         $stmt = $this->conn->prepare(
-            "SELECT s.* FROM siswa s 
+            "SELECT s.* FROM siswa s
              WHERE s.id_siswa = ?"
         );
-        
+
         if (!$stmt) {
             return false;
         }
-        
+
         $stmt->bind_param('i', $siswaId);
         $stmt->execute();
         $result = $stmt->get_result();
-        
-        // In production, add actual guru assignment verification
+
         return $result->fetch_assoc();
     }
-    
-    /**
-     * Verify admin/bk/wakasek can access student
-     */
+
     public function verifyStaffAccess($siswaId, $minRole = 'bk') {
         if (!$this->userId) {
             return false;
         }
-        
-        $allowedRoles = ['admin', 'bk', 'wakasek'];
+
+        $allowedRoles = ['admin', 'bk', 'wakasek', 'guru', 'guru_mapel'];
         if (!in_array($this->userRole, $allowedRoles, true)) {
             return false;
         }
         
-        // Staff can see any student
         $stmt = $this->conn->prepare("SELECT * FROM siswa WHERE id_siswa = ?");
         if (!$stmt) return false;
         
@@ -92,12 +83,8 @@ class AccessControl {
         return $result->fetch_assoc();
     }
     
-    /**
-     * Get student list based on user role and access
-     */
     public function getAuthorizedSiswaList() {
         if ($this->userRole === 'orangtua') {
-            // Orang tua hanya lihat anak mereka sendiri
             $stmt = $this->conn->prepare(
                 "SELECT s.* FROM siswa s 
                  JOIN users u ON (s.id_orang_tua = u.id OR s.kontak_orang_tua = u.email)
@@ -106,15 +93,13 @@ class AccessControl {
             );
             $stmt->bind_param('i', $this->userId);
         } elseif ($this->userRole === 'siswa') {
-            // Siswa hanya lihat data mereka sendiri
             $stmt = $this->conn->prepare(
                 "SELECT s.* FROM siswa s 
                  JOIN users u ON s.email = u.email
                  WHERE u.id = ?"
             );
             $stmt->bind_param('i', $this->userId);
-        } elseif (in_array($this->userRole, ['admin', 'bk', 'wakasek', 'guru'], true)) {
-            // Staff dapat melihat semua siswa (filter di UI jika perlu)
+        } elseif (in_array($this->userRole, ['admin', 'bk', 'wakasek', 'guru', 'guru_mapel'], true)) {
             $stmt = $this->conn->prepare("SELECT * FROM siswa ORDER BY nama ASC");
         } else {
             return [];
@@ -127,15 +112,11 @@ class AccessControl {
         return $result->fetch_all(MYSQLI_ASSOC);
     }
     
-    /**
-     * Verify surat access (pelanggaran letter)
-     */
     public function verifySuratAccess($suratId) {
         if (!$this->userId) {
             return false;
         }
         
-        // For orang tua - only their child's surat
         if ($this->userRole === 'orangtua') {
             $stmt = $this->conn->prepare(
                 "SELECT so.* FROM surat_orang_tua so
@@ -146,7 +127,6 @@ class AccessControl {
             );
             $stmt->bind_param('ii', $suratId, $this->userId);
         } else {
-            // Staff can access any surat
             $stmt = $this->conn->prepare(
                 "SELECT * FROM surat_orang_tua WHERE id_surat_orang_tua = ?"
             );

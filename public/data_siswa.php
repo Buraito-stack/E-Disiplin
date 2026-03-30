@@ -15,7 +15,7 @@ if (!$authController->isLoggedIn()) {
     exit;
 }
 
-requireRoles(['admin', 'guru', 'bk']);
+requireRoles(['admin', 'guru', 'bk', 'guru_mapel']);
 
 $user = $_SESSION;
 
@@ -57,6 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($stmt) {
                         $stmt->bind_param('ssssssss', $nama, $nis, $kelas, $alamat, $namaOrtu, $kontakOrtu, $pekerjaanOrtu, $alamatOrtu);
                         if ($stmt->execute()) {
+                            SecurityHelper::auditLog($conn, 'CREATE', 'siswa', $conn->insert_id, "NIS: $nis, Nama: $nama");
                             $alertMessage = 'Siswa berhasil ditambahkan.';
                             $alertType = 'success';
                         } else {
@@ -97,6 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($stmt) {
                         $stmt->bind_param('ssssssssi', $nama, $nis, $kelas, $alamat, $namaOrtu, $kontakOrtu, $pekerjaanOrtu, $alamatOrtu, $id);
                         if ($stmt->execute()) {
+                            SecurityHelper::auditLog($conn, 'UPDATE', 'siswa', $id, "NIS: $nis, Nama: $nama");
                             $alertMessage = 'Data siswa berhasil diperbarui.';
                             $alertType = 'success';
                         } else {
@@ -112,17 +114,95 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'delete_siswa') {
         $id = (int)($_POST['id_siswa'] ?? 0);
         if ($id > 0) {
-            $stmt = $conn->prepare('DELETE FROM siswa WHERE id_siswa = ?');
-            if ($stmt) {
-                $stmt->bind_param('i', $id);
-                if ($stmt->execute()) {
-                    $alertMessage = 'Siswa berhasil dihapus.';
-                    $alertType = 'success';
-                } else {
-                    $alertMessage = 'Gagal menghapus siswa.';
-                    $alertType = 'error';
+            $conn->begin_transaction();
+            try {
+                // Delete surat_orang_tua linked via pelanggaran
+                $stmt = $conn->prepare('DELETE so FROM surat_orang_tua so JOIN pelanggaran p ON p.id_pelanggaran = so.id_pelanggaran WHERE p.id_siswa = ?');
+                if ($stmt) { $stmt->bind_param('i', $id); $stmt->execute(); }
+
+                // Delete pelanggaran
+                $stmt = $conn->prepare('DELETE FROM pelanggaran WHERE id_siswa = ?');
+                if ($stmt) { $stmt->bind_param('i', $id); $stmt->execute(); }
+
+                // Delete surat_perjanjian
+                $stmt = $conn->prepare('DELETE FROM surat_perjanjian WHERE id_siswa = ?');
+                if ($stmt) { $stmt->bind_param('i', $id); $stmt->execute(); }
+
+                // Delete surat_pindah
+                $stmt = $conn->prepare('DELETE FROM surat_pindah WHERE id_siswa = ?');
+                if ($stmt) { $stmt->bind_param('i', $id); $stmt->execute(); }
+
+                // Delete siswa
+                $stmt = $conn->prepare('DELETE FROM siswa WHERE id_siswa = ?');
+                if ($stmt) {
+                    $stmt->bind_param('i', $id);
+                    $stmt->execute();
                 }
+
+                $conn->commit();
+                SecurityHelper::auditLog($conn, 'DELETE', 'siswa', $id, 'Cascade delete termasuk pelanggaran & surat');
+                $alertMessage = 'Siswa dan semua data terkait berhasil dihapus.';
+                $alertType = 'success';
+            } catch (Exception $e) {
+                $conn->rollback();
+                $alertMessage = 'Gagal menghapus siswa: ' . $e->getMessage();
+                $alertType = 'error';
             }
+        }
+    }
+
+    if ($action === 'import_csv') {
+        if (!empty($_FILES['csv_file']['tmp_name'])) {
+            $file = $_FILES['csv_file']['tmp_name'];
+            $handle = fopen($file, 'r');
+            if ($handle) {
+                $header = fgetcsv($handle);
+                if (!$header) {
+                    $alertMessage = 'File CSV kosong.';
+                    $alertType = 'error';
+                } else {
+                    $header = array_map(function($h) { return strtolower(trim($h)); }, $header);
+                    $required = ['nama', 'nis', 'kelas'];
+                    $missing = array_diff($required, $header);
+                    if (!empty($missing)) {
+                        $alertMessage = 'Kolom wajib tidak ditemukan: ' . implode(', ', $missing) . '. Header harus: nama, nis, kelas';
+                        $alertType = 'error';
+                    } else {
+                        $imported = 0;
+                        $skipped = 0;
+                        $stmtCheck = $conn->prepare('SELECT id_siswa FROM siswa WHERE nis = ? LIMIT 1');
+                        $stmtInsert = $conn->prepare('INSERT INTO siswa (nama, nis, kelas, alamat, nama_orang_tua, kontak_orang_tua, pekerjaan_orang_tua, alamat_orang_tua) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+
+                        while (($row = fgetcsv($handle)) !== false) {
+                            if (count($row) < count($header)) continue;
+                            $data = array_combine($header, $row);
+                            $nama = trim($data['nama'] ?? '');
+                            $nis = trim($data['nis'] ?? '');
+                            $kelas = trim($data['kelas'] ?? '');
+                            if ($nama === '' || $nis === '' || $kelas === '') { $skipped++; continue; }
+
+                            $stmtCheck->bind_param('s', $nis);
+                            $stmtCheck->execute();
+                            if ($stmtCheck->get_result()->num_rows > 0) { $skipped++; continue; }
+
+                            $alamat = trim($data['alamat'] ?? '');
+                            $namaOrtu = trim($data['nama_orang_tua'] ?? '');
+                            $kontakOrtu = trim($data['kontak_orang_tua'] ?? '');
+                            $pekerjaanOrtu = trim($data['pekerjaan_orang_tua'] ?? '');
+                            $alamatOrtu = trim($data['alamat_orang_tua'] ?? '');
+                            $stmtInsert->bind_param('ssssssss', $nama, $nis, $kelas, $alamat, $namaOrtu, $kontakOrtu, $pekerjaanOrtu, $alamatOrtu);
+                            if ($stmtInsert->execute()) { $imported++; } else { $skipped++; }
+                        }
+                        SecurityHelper::auditLog($conn, 'IMPORT_CSV', 'siswa', null, "Imported: $imported, Skipped: $skipped");
+                        $alertMessage = "Import selesai: $imported data berhasil, $skipped dilewati (duplikat/kosong).";
+                        $alertType = 'success';
+                    }
+                }
+                fclose($handle);
+            }
+        } else {
+            $alertMessage = 'Pilih file CSV terlebih dahulu.';
+            $alertType = 'error';
         }
     }
     }
@@ -195,7 +275,10 @@ include __DIR__ . '/../app/views/layouts/header.php';
                     <h2 class="text-2xl font-bold text-gray-900">Daftar Siswa</h2>
                     <p class="text-gray-600 mt-1">Menampilkan data siswa per halaman.</p>
                 </div>
-                <button onclick="openSiswaCreate()" class="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">Tambah Siswa</button>
+                <div class="flex gap-2">
+                    <button onclick="openModal('importCsvModal')" class="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50">Import CSV</button>
+                    <button onclick="openSiswaCreate()" class="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">Tambah Siswa</button>
+                </div>
             </div>
         </div>
 
@@ -393,6 +476,35 @@ include __DIR__ . '/../app/views/layouts/header.php';
             <div class="modal-footer">
                 <button type="button" class="px-3 py-2 rounded-lg border border-gray-200" onclick="closeModal('siswaDeleteModal')">Batal</button>
                 <button type="submit" class="px-3 py-2 rounded-lg bg-red-600 text-white">Hapus</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="importCsvModal" class="modal-backdrop" role="dialog" aria-modal="true">
+    <div class="modal-panel">
+        <div class="modal-header">
+            <h3 class="font-semibold text-gray-900">Import Data Siswa (CSV)</h3>
+            <button type="button" onclick="closeModal('importCsvModal')">&#10005;</button>
+        </div>
+        <form method="POST" enctype="multipart/form-data">
+            <div class="modal-body space-y-4">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>" />
+                <input type="hidden" name="action" value="import_csv" />
+                <div>
+                    <label class="text-sm text-gray-600">File CSV</label>
+                    <input type="file" name="csv_file" accept=".csv" required class="mt-1 w-full text-sm border border-gray-200 rounded-lg px-3 py-2" />
+                </div>
+                <div class="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                    <p class="text-xs font-semibold text-blue-900 mb-1">Format CSV:</p>
+                    <p class="text-xs text-blue-700">Header wajib: <strong>nama, nis, kelas</strong></p>
+                    <p class="text-xs text-blue-700">Opsional: alamat, nama_orang_tua, kontak_orang_tua, pekerjaan_orang_tua, alamat_orang_tua</p>
+                    <p class="text-xs text-blue-600 mt-1">NIS yang sudah ada akan dilewati (tidak duplikat).</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="px-3 py-2 rounded-lg border border-gray-200" onclick="closeModal('importCsvModal')">Batal</button>
+                <button type="submit" class="px-3 py-2 rounded-lg bg-green-600 text-white">Import</button>
             </div>
         </form>
     </div>
