@@ -151,6 +151,37 @@ Update Status: "Belum Dikirim" → "Terkirim"
 
 ---
 
+### 7. **Surat Dokumen (Pernyataan & Pindah)**
+File: `surat_dokumen.php`
+
+Fitur baru:
+- ✅ Hub untuk membuat Surat Pernyataan Siswa dan Surat Pindah
+- ✅ Tab navigation antara jenis surat
+- ✅ Auto-generate nomor surat
+- ✅ CRUD lengkap untuk kedua jenis surat
+
+### 8. **Print Surat Pindah**
+File: `surat_pindah_print.php`
+
+- Print surat pindah berdasarkan ID
+- Template dengan data siswa, sekolah tujuan, dan alasan pindah
+- Format print-friendly
+
+### 9. **Daftar Pelanggaran Print**
+File: `daftar_pelanggaran_print.php`
+
+- Laporan pelanggaran dengan filter kelas dan rentang tanggal
+- Mode preview dan print
+- Kalkulasi total poin
+
+### 10. **Database Seeder**
+File: `database/seed_dummy.php`
+
+- Seeder data dummy untuk testing
+- Membuat data siswa, pelanggaran, dan surat contoh
+
+---
+
 ## ✅ Checklist Implementasi
 
 - [x] Update database schema
@@ -162,6 +193,11 @@ Update Status: "Belum Dikirim" → "Terkirim"
 - [x] Auto-generate nomor surat
 - [x] Color-coding per level
 - [x] Update siswa level_sp field
+- [x] Surat Pernyataan Siswa
+- [x] Surat Pindah Sekolah
+- [x] Laporan Daftar Pelanggaran (filter & print)
+- [x] Database seeder untuk dummy data
+- [x] Hub dokumen surat (surat_dokumen.php)
 
 ---
 
@@ -171,14 +207,19 @@ Update Status: "Belum Dikirim" → "Terkirim"
    - Buka file `database_migration_SP.sql`
    - Execute di database MySQL Anda
 
-2. **Test Sistem:**
+2. **Seed Data Dummy** (opsional):
+   ```bash
+   php database/seed_dummy.php
+   ```
+
+3. **Test Sistem:**
    - Login sebagai Guru/BK
-   - Pergi ke menu Surat Pelanggaran
-   - Pilih pelanggaran dan level SP
-   - Klik "Buat Surat"
+   - Pergi ke menu Surat Pelanggaran → buat surat SP
+   - Pergi ke Surat Dokumen → buat surat pernyataan / pindah
+   - Pergi ke Daftar Pelanggaran → filter dan print laporan
    - Lihat hasil print dengan template yang sesuai
 
-3. **Verifikasi di Dashboard:**
+4. **Verifikasi di Dashboard:**
    - Cek di Dashboard Orang Tua → lihat kolom Level SP
    - Cek di Dashboard Siswa → lihat kolom Level SP
    - Verifikasi color-coding muncul dengan benar
@@ -191,4 +232,6 @@ Update Status: "Belum Dikirim" → "Terkirim"
 - Setiap surat dibuat, siswa `level_sp` otomatis terupdate
 - Orang tua & Siswa bisa melihat historical surat dengan level progressif
 - Template surat print bisa langsung di-print atau save as PDF
+- Surat Pernyataan dan Surat Pindah dikelola via `surat_dokumen.php`
+- Laporan pelanggaran bisa difilter per kelas dan rentang tanggal
 
