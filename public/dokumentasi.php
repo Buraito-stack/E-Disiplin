@@ -102,7 +102,7 @@ include __DIR__ . '/../app/views/layouts/header.php';
             </ul>
         </div>
 
-        <?php if (in_array($role, ['admin', 'guru', 'bk', 'guru_mapel'], true)): ?>
+        <?php if (in_array($role, ['admin', 'guru', 'bk'], true)): ?>
         <!-- ============================================================ -->
         <!-- PANDUAN STAFF (Admin, Guru, BK, Guru Mapel) -->
         <!-- ============================================================ -->
@@ -153,7 +153,7 @@ include __DIR__ . '/../app/views/layouts/header.php';
         </div>
 
         <!-- Surat Pelanggaran -->
-        <?php if ($role !== 'guru_mapel'): ?>
+        <?php if ($isStaff): ?>
         <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-4">
             <div class="flex items-center gap-3 mb-3">
                 <div class="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -251,7 +251,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
                         <span class="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">admin</span>
                         <span class="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">guru</span>
                         <span class="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">bk</span>
-                        <span class="px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">guru_mapel</span>
                         <span class="px-2 py-0.5 rounded text-xs font-medium bg-pink-100 text-pink-800">orangtua</span>
                         <span class="px-2 py-0.5 rounded text-xs font-medium bg-cyan-100 text-cyan-800">siswa</span>
                     </div>

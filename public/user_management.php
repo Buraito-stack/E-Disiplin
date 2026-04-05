@@ -253,7 +253,7 @@ include __DIR__ . '/../app/views/layouts/header.php';
                                     <td class="py-2 pr-4"><?php echo htmlspecialchars($row['name']); ?></td>
                                     <td class="py-2 pr-4"><?php echo htmlspecialchars($row['email'] ?? '-'); ?></td>
                                     <td class="py-2 pr-4"><?php
-                                        $roleLabels = ['admin'=>'Admin','guru'=>'Guru','bk'=>'Guru BK','guru_mapel'=>'Guru Mapel','orangtua'=>'Orang Tua','siswa'=>'Siswa'];
+                                        $roleLabels = ['admin'=>'Admin','guru'=>'Guru','bk'=>'Guru BK','orangtua'=>'Orang Tua','siswa'=>'Siswa'];
                                         echo htmlspecialchars($roleLabels[$row['role']] ?? $row['role']);
                                     ?></td>
                                     <td class="py-2 pr-4">
@@ -337,7 +337,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
                         <option value="admin">Admin</option>
                         <option value="guru" selected>Guru</option>
                         <option value="bk">Guru BK</option>
-                        <option value="guru_mapel">Guru Mapel</option>
                         <option value="orangtua">Orang Tua</option>
                         <option value="siswa">Siswa</option>
                     </select>
@@ -380,7 +379,6 @@ include __DIR__ . '/../app/views/layouts/header.php';
                         <option value="admin">Admin</option>
                         <option value="guru">Guru</option>
                         <option value="bk">Guru BK</option>
-                        <option value="guru_mapel">Guru Mapel</option>
                         <option value="orangtua">Orang Tua</option>
                         <option value="siswa">Siswa</option>
                     </select>

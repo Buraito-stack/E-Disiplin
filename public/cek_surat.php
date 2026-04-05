@@ -42,7 +42,7 @@ if ($nis !== '') {
             if ($s['nis'] === $nis) { $allowed = true; break; }
         }
     } else {
-        $allowed = in_array($role, ['admin', 'guru', 'bk', 'guru_mapel'], true);
+        $allowed = in_array($role, ['admin', 'guru', 'bk'], true);
     }
 
     if ($allowed) {

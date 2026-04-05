@@ -42,7 +42,7 @@ class AccessControl {
             return false;
         }
 
-        $staffRoles = ['admin', 'guru', 'bk', 'guru_mapel'];
+        $staffRoles = ['admin', 'guru', 'bk', 'guru'];
         if (!in_array($this->userRole, $staffRoles, true)) {
             return false;
         }
@@ -68,7 +68,7 @@ class AccessControl {
             return false;
         }
 
-        $allowedRoles = ['admin', 'bk', 'wakasek', 'guru', 'guru_mapel'];
+        $allowedRoles = ['admin', 'bk', 'wakasek', 'guru'];
         if (!in_array($this->userRole, $allowedRoles, true)) {
             return false;
         }
@@ -99,7 +99,7 @@ class AccessControl {
                  WHERE u.id = ?"
             );
             $stmt->bind_param('i', $this->userId);
-        } elseif (in_array($this->userRole, ['admin', 'bk', 'wakasek', 'guru', 'guru_mapel'], true)) {
+        } elseif (in_array($this->userRole, ['admin', 'bk', 'wakasek', 'guru'], true)) {
             $stmt = $this->conn->prepare("SELECT * FROM siswa ORDER BY nama ASC");
         } else {
             return [];

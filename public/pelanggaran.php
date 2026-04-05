@@ -15,7 +15,7 @@ if (!$authController->isLoggedIn()) {
     exit;
 }
 
-requireRoles(['admin', 'guru', 'bk', 'guru_mapel']);
+requireRoles(['admin', 'guru', 'bk']);
 
 $user = $_SESSION;
 

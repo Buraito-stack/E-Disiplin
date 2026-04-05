@@ -22,14 +22,14 @@ if ($role === 'orangtua') {
 } elseif ($role === 'siswa') {
     header('Location: siswa_dashboard.php');
     exit;
-} elseif (!in_array($role, ['admin', 'guru', 'bk', 'guru_mapel'], true)) {
+} elseif (!in_array($role, ['admin', 'guru', 'bk'], true)) {
     header('Location: index.php');
     exit;
 }
 
 $user = $_SESSION;
 $role = $user['role'] ?? '';
-$isStaff = in_array($role, ['admin', 'guru', 'bk', 'guru_mapel'], true);
+$isStaff = in_array($role, ['admin', 'guru', 'bk'], true);
 
 $siswaCount = 0;
 $pelanggaranCount = 0;

@@ -3,7 +3,7 @@
         <?php
             $currentPage = basename($_SERVER['PHP_SELF']);
             $role = $_SESSION['role'] ?? '';
-            $isStaff = in_array($role, ['admin', 'guru', 'bk', 'guru_mapel'], true);
+            $isStaff = in_array($role, ['admin', 'guru', 'bk'], true);
         ?>
         <nav class="dock" aria-label="Dock">
             <a href="reset_password.php" class="dock-profile <?php echo $currentPage === 'reset_password.php' ? 'is-active' : ''; ?>">
@@ -77,7 +77,6 @@
                     <span class="dock-label">Jenis</span>
                 </a>
                 <?php endif; ?>
-                <?php if ($role !== 'guru_mapel'): ?>
                 <a href="surat_pelanggaran.php" class="dock-item <?php echo in_array($currentPage, ['surat_pelanggaran.php', 'surat_dokumen.php'], true) ? 'is-active' : ''; ?>" data-label="Surat">
                     <span class="dock-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -87,7 +86,6 @@
                     </span>
                     <span class="dock-label">Surat</span>
                 </a>
-                <?php endif; ?>
                 <?php if ($role === 'admin'): ?>
                     <a href="user_management.php" class="dock-item <?php echo $currentPage === 'user_management.php' ? 'is-active' : ''; ?>" data-label="User">
                         <span class="dock-icon">
