@@ -21,3 +21,4 @@ _ide_helper.php
 sql/
 *.sql
 !database_migration_SP.sql
+.claude/
