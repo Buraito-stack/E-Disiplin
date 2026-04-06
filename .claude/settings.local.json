@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php database/seed_dummy.php)",
+      "Bash(mysql -u root -e \"SELECT VERSION\\(\\);\")",
+      "Bash(mysql -u root e_disiplin -e \"ALTER TABLE surat_perjanjian ADD COLUMN IF NOT EXISTS nomor_surat VARCHAR\\(100\\) DEFAULT NULL;\")"
+    ]
+  }
+}

@@ -53,6 +53,8 @@ if (empty($data['nomor_surat'])) {
     $data['nomor_surat'] = sprintf('%03d/SMKTIG/KPK/%s/%s', $data['id_surat_pindah'], $bulan, $tahun);
 }
 
+SecurityHelper::auditLog($conn, 'READ', 'surat_pindah', $idSurat, 'Print surat pindah');
+
 require_once __DIR__ . '/../app/templates/SuratTemplate.php';
 echo getTemplateSuratPindah($data);
 ?>

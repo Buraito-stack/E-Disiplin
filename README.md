@@ -5,19 +5,23 @@ Sistem manajemen disiplin siswa berbasis web untuk mencatat pelanggaran, mengelo
 ## Fitur
 
 - **Autentikasi & Otorisasi** - Session-based auth dengan CSRF protection, rate limiting, dan role-based access control
-- **Role Management** - Admin, Guru, BK, Guru Mapel, Orang Tua, Siswa
-- **Data Siswa** - CRUD data siswa lengkap dengan info orang tua
-- **Pencatatan Pelanggaran** - CRUD pelanggaran dengan jenis, poin, dan keterangan
+- **Role Management** - Admin, Guru, BK, Orang Tua, Siswa (5 role)
+- **Data Siswa** - CRUD data siswa lengkap dengan info orang tua, CSV import
+- **Pencatatan Pelanggaran** - CRUD pelanggaran dengan jenis, poin, bulk delete, dan keterangan
+- **Jenis Pelanggaran** - CRUD master jenis pelanggaran beserta bobot poin
 - **Surat Pelanggaran Berjenjang** - SP1, SP2, SP3, LE dengan auto-generate nomor surat
 - **Surat Pernyataan Siswa** - Surat pernyataan dengan tanda tangan guru BK, wali kelas, dan wakasek
 - **Surat Pindah** - Surat keterangan pindah sekolah
 - **Daftar Pelanggaran** - Laporan pelanggaran dengan filter kelas dan rentang tanggal
 - **Dashboard** - Statistik, grafik tren 7 hari, dan ringkasan pelanggaran terbaru
 - **Dashboard Orang Tua** - Pantau pelanggaran dan surat anak (ownership-verified)
-- **Dashboard Siswa** - Lihat pelanggaran dan surat pribadi
-- **User Management** - CRUD user oleh admin
-- **Reset Password** - Ganti password dengan verifikasi password lama
+- **Dashboard Siswa** - Lihat pelanggaran dan surat pribadi, progress bar poin
+- **User Management** - CRUD user, reset password oleh admin
+- **Pengaturan Akun** - Ganti nama, email, dan password
+- **Pengaturan Sistem** - Konfigurasi nama sekolah, alamat, email, pejabat penandatangan
+- **Audit Log** - Pencatatan otomatis setiap aktivitas CRUD (Create, Read, Update, Delete)
 - **Print** - Cetak semua jenis surat dalam format print-friendly
+- **Dokumentasi** - Panduan penggunaan terintegrasi per role
 
 ## Struktur Project
 
@@ -30,7 +34,8 @@ E-Disiplin/
 │   ├── controllers/
 │   │   └── AuthController.php   # Login/logout logic
 │   ├── helpers/
-│   │   └── SecurityHelper.php   # CSRF, rate limiting, sanitasi input, logging
+│   │   ├── SecurityHelper.php   # CSRF, rate limiting, sanitasi input, audit log
+│   │   └── SettingsHelper.php   # Manajemen app_settings (key-value)
 │   ├── middleware/
 │   │   ├── AccessControl.php    # Verifikasi kepemilikan data & role access
 │   │   ├── AuthMiddleware.php   # Inisialisasi session
@@ -42,26 +47,28 @@ E-Disiplin/
 │   └── views/
 │       ├── layouts/
 │       │   ├── header.php       # Header & navigasi
-│       │   └── footer.php       # Footer
+│       │   └── footer.php       # Footer & dock sidebar
 │       └── login.php            # Halaman login
 ├── database/
 │   └── seed_dummy.php           # Seeder data dummy untuk testing
 ├── public/                      # Web-accessible root
 │   ├── index.php                # Login page / front controller
 │   ├── dashboard.php            # Dashboard admin/staff (statistik & chart)
-│   ├── pelanggaran.php          # CRUD pelanggaran (search, pagination)
-│   ├── data_siswa.php           # CRUD data siswa
-│   ├── user_management.php      # CRUD user (admin only)
-│   ├── surat_pelanggaran.php    # Kelola surat pelanggaran (SP1-SP3, LE)
-│   ├── surat_dokumen.php        # Hub surat pernyataan & surat pindah
-│   ├── surat_print.php          # Print surat pelanggaran/pernyataan/pindah
+│   ├── siswa_dashboard.php      # Dashboard siswa (poin, riwayat, progress bar)
+│   ├── ortu_dashboard.php       # Dashboard orang tua (data anak)
+│   ├── data_siswa.php           # CRUD data siswa + CSV import
+│   ├── pelanggaran.php          # CRUD pelanggaran (search, pagination, bulk delete)
+│   ├── jenis_pelanggaran.php    # CRUD jenis pelanggaran & bobot poin
+│   ├── surat_pelanggaran.php    # Kelola surat SP, pernyataan, pindah (3 tab)
+│   ├── surat_print.php          # Print surat pelanggaran/pernyataan
 │   ├── surat_pernyataan_print.php  # Print surat pernyataan siswa
 │   ├── surat_pindah_print.php   # Print surat pindah by ID
 │   ├── daftar_pelanggaran_print.php # Print laporan pelanggaran (filter)
 │   ├── cek_surat.php            # Cek surat by NIS (ortu/siswa)
-│   ├── siswa_dashboard.php      # Dashboard siswa
-│   ├── ortu_dashboard.php       # Dashboard orang tua
-│   ├── reset_password.php       # Ganti password
+│   ├── user_management.php      # CRUD user + reset password (admin only)
+│   ├── reset_password.php       # Pengaturan akun (nama, email, password)
+│   ├── pengaturan_sistem.php    # Konfigurasi sekolah & pejabat (admin only)
+│   ├── dokumentasi.php          # Panduan penggunaan per role
 │   ├── endpoint/
 │   │   └── auth/
 │   │       ├── login.php        # JSON login endpoint (CSRF, rate-limited)
@@ -73,27 +80,30 @@ E-Disiplin/
 └── README.md
 ```
 
-## Database Schema
+## Database Schema (9 Tabel)
+
+Database: `e_disiplin`
 
 | Tabel | Fungsi | Kolom Utama |
 |-------|--------|-------------|
-| **users** | Autentikasi user | id, username, password, email, name, role, is_active |
-| **siswa** | Data siswa | id_siswa, nama, nis, kelas, alamat, nama_orang_tua, kontak_orang_tua, level_sp |
-| **jenis_pelanggaran** | Jenis pelanggaran | id_jenis, nama_jenis, poin |
-| **pelanggaran** | Catatan pelanggaran | id_pelanggaran, id_siswa, id_jenis, tanggal, keterangan |
-| **surat_orang_tua** | Surat pelanggaran (SP) | id_surat_orang_tua, id_pelanggaran, level_sp, nomor_surat, status_kirim |
-| **surat_perjanjian** | Surat pernyataan siswa | id_perjanjian, id_siswa, isi_perjanjian, nomor_surat, nama_guru_bk |
-| **surat_pindah** | Surat pindah sekolah | id_surat_pindah, id_siswa, alasan_pindah, sekolah_tujuan |
+| **users** | Kredensial akun | id, username, password, email, name, role, is_active |
+| **siswa** | Data identitas siswa & orang tua | id_siswa, nama, nis, kelas, alamat, nama_orang_tua, kontak_orang_tua, level_sp |
+| **jenis_pelanggaran** | Master kategori & bobot poin | id_jenis, nama_jenis, poin, deskripsi |
+| **pelanggaran** | Catatan historis pelanggaran | id_pelanggaran, id_siswa, id_jenis, tanggal, keterangan |
+| **surat_orang_tua** | Surat peringatan berjenjang | id_surat_orang_tua, id_pelanggaran, level_sp, nomor_surat, status_kirim |
+| **surat_perjanjian** | Surat pernyataan komitmen siswa | id_perjanjian, id_siswa, isi_perjanjian, nomor_surat, nama_guru_bk |
+| **surat_pindah** | Administrasi pindah sekolah | id_surat_pindah, id_siswa, alasan_pindah, sekolah_tujuan |
+| **app_settings** | Konfigurasi global sistem | setting_key, setting_value, updated_at |
+| **audit_log** | Rekam jejak aktivitas pengguna | id, user_id, username, action, table_name, record_id, ip_address |
 
-## Role & Hak Akses
+## Role & Hak Akses (5 Role)
 
 | Role | Akses |
 |------|-------|
-| **admin** | Semua fitur (user, siswa, pelanggaran, surat) |
-| **guru** | Pelanggaran, surat, data siswa |
-| **bk** | Pelanggaran, surat, data siswa |
-| **guru_mapel** | Pelanggaran, surat, cek surat |
-| **orangtua** | Dashboard orang tua (data anak saja) |
+| **admin** | Semua fitur (user, siswa, pelanggaran, surat, jenis, pengaturan sistem) |
+| **guru** | Input pelanggaran, buat surat, lihat data siswa |
+| **bk** | Sama dengan guru (Bimbingan Konseling) |
+| **orangtua** | Dashboard orang tua (data anak saja, ownership-verified) |
 | **siswa** | Dashboard siswa (data sendiri saja) |
 
 ## Sistem Surat Pelanggaran Berjenjang
@@ -105,7 +115,18 @@ E-Disiplin/
 | SP3 | Surat Pelanggaran Ketiga | Pelanggaran Berat - Peringatan akhir |
 | LE | Level Ekstensif | Tindakan Final - Rapat keputusan |
 
-Flow: Pelanggaran Dicatat → Guru/BK Buat Surat (pilih level) → Auto-generate Nomor Surat → Update Level SP Siswa → Cetak Surat → Orang Tua Terima & Tanda Tangan
+Flow: Pelanggaran dicatat -> Guru/BK buat surat (pilih level) -> Auto-generate nomor surat -> Update level SP siswa -> Cetak surat -> Orang tua terima
+
+## Pengaturan Sistem (App Settings)
+
+| Key | Fungsi |
+|-----|--------|
+| `nama_sekolah` | Nama resmi sekolah |
+| `alamat_sekolah` | Alamat lengkap sekolah |
+| `email_sekolah` | Email resmi sekolah |
+| `nama_kepala_sekolah` | Nama kepala sekolah (untuk tanda tangan surat) |
+| `nama_guru_bk` | Nama guru BK default |
+| `nama_wakasek` | Nama wakil kepala sekolah default |
 
 ## Test Accounts
 
@@ -159,38 +180,25 @@ Flow: Pelanggaran Dicatat → Guru/BK Buat Surat (pilih level) → Auto-generate
 
 - CSRF Protection pada semua form POST
 - Prepared Statements (SQL injection prevention)
-- Password hashing dengan bcrypt
+- Password hashing dengan bcrypt + complexity enforcement (min 6, huruf & angka)
 - Rate limiting pada login (5 percobaan / 15 menit)
 - Security headers (X-Frame-Options, CSP, X-XSS-Protection, dll)
 - Input sanitization (htmlspecialchars, trim)
 - Session security (HTTP-only cookies, SameSite strict)
-- Access control & data ownership verification
-- Security event logging
+- Ownership verification / IDOR protection (surat & data siswa)
+- Audit logging CRUD ke tabel audit_log (user, action, tabel, IP, timestamp)
+- Cascade delete (hapus siswa otomatis hapus data terkait dalam transaction)
 
 ## Tech Stack
 
-- **Backend**: Pure PHP (no framework), clean OOP
-- **Database**: MySQL dengan MySQLi
-- **Frontend**: Tailwind CSS (CDN), Vanilla JS
-- **Auth**: Session-based
-
-## Surat Templates & Autofill
-
-### Jenis Surat
-1. **Surat Pelanggaran** (SP1/SP2/SP3/LE) - via `surat_print.php`
-2. **Surat Pernyataan Siswa** - via `surat_pernyataan_print.php` atau `surat_print.php?type=pernyataan`
-3. **Surat Pindah** - via `surat_pindah_print.php?id=X`
-4. **Daftar Pelanggaran** - via `daftar_pelanggaran_print.php` (filter kelas & tanggal)
-
-### Autofill Parameters (Surat Pernyataan)
-Query string keys: `nama`, `nis`, `kelas`, `program`, `masalah`, `nama_orang_tua`, `pekerjaan_orang_tua`, `alamat_orang_tua`, `kontak_orang_tua`, `nama_guru_bk`, `nama_guru_wali`, `nomor_surat`, `tanggal_cetak`
-
-Contoh:
-```
-/surat_print.php?type=pernyataan&nama=Budi&nis=12345&kelas=11A&program=Software+Engineering&masalah=Telat+sekolah
-```
+- **Backend**: PHP 7.4+ (Native OOP, tanpa framework)
+- **Database**: MySQL 5.7+ (MySQLi, Prepared Statements)
+- **Frontend**: HTML5, Tailwind CSS (CDN), Vanilla JavaScript
+- **Chart**: Chart.js 4.4.1 (CDN)
+- **Font**: Google Fonts - Inter
+- **Auth**: Session-based, bcrypt password hashing
 
 ---
 
-**Version**: 1.1.0
-**Last Updated**: March 31, 2026
+**Version**: 1.2.0
+**Last Updated**: April 6, 2026

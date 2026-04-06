@@ -15,9 +15,11 @@ class SettingsHelper {
         $result = $conn->query("SELECT COUNT(*) AS cnt FROM app_settings");
         if ($result && (int)$result->fetch_assoc()['cnt'] === 0) {
             $defaults = [
-                'nama_sekolah'    => 'SMK TI Global Bali',
-                'nama_guru_bk'    => 'I Gusti Ayu Rinjani, M.Pd',
-                'nama_wakasek'    => 'Bagus Putu Eka Wijaya, S.Kom',
+                'nama_sekolah'        => 'SMK TI Global Bali',
+                'alamat_sekolah'      => '',
+                'email_sekolah'       => '',
+                'nama_guru_bk'        => 'I Gusti Ayu Rinjani, M.Pd',
+                'nama_wakasek'        => 'Bagus Putu Eka Wijaya, S.Kom',
                 'nama_kepala_sekolah' => 'Drs. I Wayan Sukadana, M.Pd',
             ];
             $stmt = $conn->prepare("INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES (?, ?)");

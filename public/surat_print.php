@@ -77,6 +77,8 @@ if ($type === 'pernyataan') {
     }
 }
 
+SecurityHelper::auditLog($conn, 'READ', 'surat', $idSurat ?? null, "Print surat type: $type");
+
 require_once __DIR__ . '/../app/templates/SuratTemplate.php';
 if ($type === 'pernyataan') {
     echo getTemplateSuratPernyataan($data);

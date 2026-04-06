@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $alertMessage = 'Token tidak valid. Muat ulang halaman.';
         $alertType = 'error';
     } else {
-        $settingsKeys = ['nama_sekolah', 'nama_guru_bk', 'nama_wakasek', 'nama_kepala_sekolah'];
+        $settingsKeys = ['nama_sekolah', 'alamat_sekolah', 'email_sekolah', 'nama_guru_bk', 'nama_wakasek', 'nama_kepala_sekolah'];
         foreach ($settingsKeys as $key) {
             $value = trim($_POST[$key] ?? '');
             if ($value !== '') {
@@ -97,6 +97,20 @@ include __DIR__ . '/../app/views/layouts/header.php';
                                value="<?php echo htmlspecialchars($settings['nama_sekolah'] ?? ''); ?>"
                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                placeholder="Nama sekolah">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Alamat Sekolah</label>
+                        <input type="text" name="alamat_sekolah"
+                               value="<?php echo htmlspecialchars($settings['alamat_sekolah'] ?? ''); ?>"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                               placeholder="Alamat lengkap sekolah">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email Sekolah</label>
+                        <input type="email" name="email_sekolah"
+                               value="<?php echo htmlspecialchars($settings['email_sekolah'] ?? ''); ?>"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                               placeholder="email@sekolah.sch.id">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Kepala Sekolah</label>
