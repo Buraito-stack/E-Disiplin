@@ -19,7 +19,8 @@ try {
     }
     
     // Rate Limiting (BRUTE-FORCE PROTECTION)
-    if (!SecurityHelper::checkRateLimit($_SERVER['REMOTE_ADDR'], 'login', 5, 900)) {
+    $rateMax = (getenv('APP_ENV') === 'production') ? 5 : 50;
+    if (!SecurityHelper::checkRateLimit($_SERVER['REMOTE_ADDR'], 'login', $rateMax, 900)) {
         http_response_code(429);
         echo json_encode([
             'success' => false,

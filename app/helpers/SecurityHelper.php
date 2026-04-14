@@ -101,7 +101,7 @@ class SecurityHelper {
 
         $stmt = $conn->prepare("INSERT INTO audit_log (user_id, username, action, table_name, record_id, details, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?)");
         if ($stmt) {
-            $stmt->bind_param('isssis', $userId, $username, $action, $tableName, $recordId, $details, $ip);
+            $stmt->bind_param('isssiss', $userId, $username, $action, $tableName, $recordId, $details, $ip);
             $stmt->execute();
         }
     }
