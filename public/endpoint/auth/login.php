@@ -18,17 +18,17 @@ try {
         exit;
     }
     
-    // Rate Limiting (BRUTE-FORCE PROTECTION)
-    $rateMax = (getenv('APP_ENV') === 'production') ? 5 : 50;
-    if (!SecurityHelper::checkRateLimit($_SERVER['REMOTE_ADDR'], 'login', $rateMax, 900)) {
-        http_response_code(429);
-        echo json_encode([
-            'success' => false,
-            'message' => 'Terlalu banyak percobaan login. Coba lagi dalam beberapa menit.'
-        ]);
-        exit;
-    }
-    
+    // Rate Limiting (BRUTE-FORCE PROTECTION) - DISABLED
+    // $rateMax = (getenv('APP_ENV') === 'production') ? 5 : 50;
+    // if (!SecurityHelper::checkRateLimit($_SERVER['REMOTE_ADDR'], 'login', $rateMax, 900)) {
+    //     http_response_code(429);
+    //     echo json_encode([
+    //         'success' => false,
+    //         'message' => 'Terlalu banyak percobaan login. Coba lagi dalam beberapa menit.'
+    //     ]);
+    //     exit;
+    // }
+
     $database = new Database();
     $conn = $database->connect();
     
